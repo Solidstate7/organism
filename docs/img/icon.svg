@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Organism: four stacked layers, from intent at the top to code at the bottom, joined by one thread">
+  <rect width="512" height="512" rx="112" fill="#1B222B"/>
+  <g fill="#E6EAEE">
+    <rect x="88" y="123" width="336" height="44" rx="22" fill="#7FB0E8"/>
+    <rect x="112" y="197" width="288" height="44" rx="22" opacity="0.92"/>
+    <rect x="136" y="271" width="240" height="44" rx="22" opacity="0.84"/>
+    <rect x="160" y="345" width="192" height="44" rx="22" fill="#4CC38A"/>
+  </g>
+  <line x1="256" y1="145" x2="256" y2="367" stroke="#1B222B" stroke-width="22" stroke-linecap="round"/>
+  <line x1="256" y1="145" x2="256" y2="367" stroke="#7FB0E8" stroke-width="10" stroke-linecap="round"/>
+  <g stroke="#1B222B" stroke-width="7">
+    <circle cx="256" cy="145" r="17" fill="#E6EAEE"/>
+    <circle cx="256" cy="219" r="17" fill="#7FB0E8"/>
+    <circle cx="256" cy="293" r="17" fill="#7FB0E8"/>
+    <circle cx="256" cy="367" r="17" fill="#E6EAEE"/>
+  </g>
+</svg>

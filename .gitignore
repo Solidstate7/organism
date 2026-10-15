@@ -26,6 +26,8 @@
 # README diagrams are hand-drawn SVGs (mermaid needed zoom + pan to read).
 # Targeted to docs/img so a stray svg elsewhere stays under the deny-by-default.
 !/docs/img/*.svg
+# The plugin icon (plugin.json "icon"), shown in Anthropic's directory.
+!/docs/img/icon.png
 # Synthetic transcripts for the renderer tests (JSON Lines).
 !/claude/hooks/tests/fixtures/transcripts/*.jsonl
 

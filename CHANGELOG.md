@@ -4,6 +4,16 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-16
+
+### Changed
+
+- The marketplace and plugin descriptions say what Organism is for, and `plugin.json`
+  points at an icon (`docs/img/icon.png`) for Anthropic's directory.
+- Tests: the session-end check allows a slow CI runner (1 s instead of 300 ms, still well
+  inside the hook's budget) and never reads a half-written file; the `bin/` and setup
+  checks pass in a clone in daily use (stray cache files, a clone's own pairings file).
+
 ## [0.1.0] - 2026-10-16
 
 First public release.

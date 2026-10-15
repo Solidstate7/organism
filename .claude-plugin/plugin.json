@@ -1,10 +1,21 @@
 {
   "name": "organism",
   "displayName": "Organism",
-  "version": "0.1.0",
-  "description": "Session notes in your vault, decision records with /handoff, a publish guard, and an optional doc check",
-  "author": { "name": "Solidstate7", "url": "https://github.com/Solidstate7" },
+  "version": "0.1.1",
+  "description": "Keeps the reasons behind your code: session notes in your vault, decision records linked to the commits that carry them out, a where-we-are brief for the next session, and a publish guard.",
+  "icon": "./docs/img/icon.png",
+  "author": {
+    "name": "Solidstate7",
+    "url": "https://github.com/Solidstate7"
+  },
   "homepage": "https://github.com/Solidstate7/organism",
   "repository": "https://github.com/Solidstate7/organism",
-  "keywords": ["handoff", "adr", "obsidian", "session-notes", "publish-guard"]
+  "keywords": [
+    "handoff",
+    "adr",
+    "decision-records",
+    "obsidian",
+    "session-notes",
+    "publish-guard"
+  ]
 }
