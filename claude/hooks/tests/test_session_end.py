@@ -2,7 +2,7 @@
 """tests for the SessionEnd split: session-end-handoff.py (launcher) returns fast and
 hands the payload to a detached worker; session-end-worker.py takes a per-session lock
 and runs the final mirror pass.
-  - the launcher returns in under 300 ms while a stub worker sleeps for 5 s
+  - the launcher returns in well under a second while a stub worker sleeps for 5 s
   - the stub worker gets the payload on stdin and outlives the launcher's process group
   - with no writable ~/.claude/logs the launcher still starts the worker
   - the real worker runs one final pass, logs it, and skips when the lock is held
@@ -49,7 +49,9 @@ def wait_for(path, secs=10.0, text=None):
 STUB = '''import sys, time, os
 data = sys.stdin.read()
 time.sleep(float(os.environ.get("STUB_SLEEP", "5")))
-open(os.environ["STUB_OUT"], "w").write(data)
+out = os.environ["STUB_OUT"]
+open(out + ".tmp", "w").write(data)
+os.replace(out + ".tmp", out)   # atomic: the file never exists half-written
 '''
 
 
@@ -73,10 +75,12 @@ t0 = time.monotonic()
 r = subprocess.run([sys.executable, os.path.join(d, "session-end-handoff.py")], input=PAYLOAD,
                    text=True, env=env, capture_output=True)
 took = time.monotonic() - t0
-check(f"returns in under 300 ms while the worker sleeps 5 s ({took * 1000:.0f} ms)", took < 0.3)
+# Claude Code gives a SessionEnd hook about 1.5 s; the point is that the launcher does not
+# wait for the 5 s worker. A slow CI runner needs a few hundred ms just to start python.
+check(f"returns in under a second while the worker sleeps 5 s ({took * 1000:.0f} ms)", took < 1.0)
 check("exits 0", r.returncode == 0)
 check("creates ~/.claude/logs", os.path.isdir(os.path.join(home, ".claude", "logs")))
-check("the worker gets the payload on stdin", wait_for(out, 10) and open(out).read() == PAYLOAD)
+check("the worker gets the payload on stdin", wait_for(out, 15) and open(out).read() == PAYLOAD)
 
 print("session-end: the worker outlives the hook's process group")
 home = tmp()
