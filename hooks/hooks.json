@@ -1,0 +1,83 @@
+{
+  "description": "Organism's hooks: the publish guard, the handoff brief at session start, and the session mirror",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/guard-publish.sh"],
+            "timeout": 15,
+            "onFailure": "block",
+            "statusMessage": "Scanning for confidential content before publish"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/guard-publish.sh"],
+            "timeout": 15,
+            "onFailure": "block",
+            "statusMessage": "Checking MCP tool call for publish actions"
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/guard-publish.sh"],
+            "timeout": 15,
+            "onFailure": "block",
+            "statusMessage": "Scanning web request before it leaves"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/inject-handoff.sh"],
+            "timeout": 10,
+            "statusMessage": "Loading project handoff"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/obsidian-mirror.py"],
+            "timeout": 10,
+            "statusMessage": "Mirroring turn to Obsidian"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/session-end-handoff.py"]
+          }
+        ]
+      }
+    ]
+  }
+}

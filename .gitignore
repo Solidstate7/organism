@@ -1,0 +1,69 @@
+# ~/.organism: machine-agnostic agent-harness code, symlink-deployed into ~/.claude.
+#
+# DENY BY DEFAULT. Only known code file types are committed; everything else
+# (credentials, tokens, per-machine state, logs, caches, generated files) is
+# ignored unless explicitly re-included below. The HARD RE-DENY block (§4)
+# overrides the re-includes, so a secret can never be staged even by accident.
+
+# 1) ignore every file at every depth, but still descend into directories
+*
+!*/
+
+# 2) re-include known code file types (any depth)
+# (There are no *.tmpl / *.plist.tmpl re-includes: no template file exists;
+# install-agents.sh renders plists inline via emit_plist.)
+!/bin/organism
+!*.py
+!*.sh
+!*.js
+!*.json
+!*.md
+!*.example
+!.gitignore
+# Without a yml re-include the CI workflow could never ship.
+# Targeted (not '!*.yml') to keep the deny-by-default posture for stray yaml.
+!/.github/workflows/ci.yml
+# README diagrams are hand-drawn SVGs (mermaid needed zoom + pan to read).
+# Targeted to docs/img so a stray svg elsewhere stays under the deny-by-default.
+!/docs/img/*.svg
+# Synthetic transcripts for the renderer tests (JSON Lines).
+!/claude/hooks/tests/fixtures/transcripts/*.jsonl
+
+# 3) re-include extensionless code we ship, by tree/glob (no codenames)
+!/LICENSE
+!/claude/git-hooks/**
+# THIS repo's own git hooks (deploy.sh links them into <git-dir>/hooks so `git pull` runs
+# converge.sh). Extensionless by git's naming rules, so the `*` deny + extension allowlist
+# above would drop them and a fresh clone would silently have no hooks at all.
+!/git-hooks/**
+!/claude/hooks/health/sudoers-*
+
+# 4) HARD RE-DENY, never commit, even under a re-included tree (overrides §2–3)
+.credentials.json
+**/state/
+**/logs/
+**/sessions/
+telegram-*.json
+telegram-*.txt
+*.bak
+*.bak-*
+*.pyc
+__pycache__/
+HANDOFF.md
+host.json
+paths.env
+reconcile-pairings.json
+# host-local INSTANCE code (e.g. a personal report): per-host, never core, never
+# published, run as standalone launchd agents via the gitignored ~/.claude/state/agents.local
+# manifest (registered in launchd/install-agents.sh). Reachable via the ~/.claude/hooks
+# symlink.
+/claude/hooks/local/
+# Skills, personal or synced from claude.ai: deploy.sh links ~/.claude/skills here, so every
+# skill Claude Code saves lands in this tree. The core ships none; never commit one.
+/claude/skills/
+# ...but keep the sanitized, codename-free examples (override the re-deny)
+!**/paths.env.example
+!**/reconcile-pairings.example.json
+# case-insensitive macOS FS: the HANDOFF.md re-deny above also matches the
+# lowercase /handoff command file, keep that one code file.
+!/claude/commands/handoff.md

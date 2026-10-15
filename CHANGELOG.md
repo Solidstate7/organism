@@ -1,0 +1,39 @@
+# Changelog
+
+All notable changes to Organism are listed here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/).
+
+## [0.1.0] - 2026-10-16
+
+First public release.
+
+### Added
+
+- **Claude Code plugin.** Organism installs as a plugin (`.claude-plugin/plugin.json`,
+  a one-plugin marketplace, `hooks/hooks.json`). A clone installed with `bootstrap.sh`
+  still works, and `organism migrate --to-plugin` moves a clone install over (with
+  `--to-symlink` to go back).
+- **Session notes.** Every Claude Code session is saved as a readable markdown note in
+  your vault, updated after every reply and finished when the session ends. Thinking
+  blocks are never written, and secrets that look like keys, tokens or passwords are
+  redacted before anything reaches disk.
+- **`/handoff`.** Commits outstanding work, writes decision records (ADRs) for the
+  decisions the session made, links each record to the commits that carry it out, and
+  rewrites a short `HANDOFF.md` brief that the next session loads on start.
+- **`/incognito`.** Pauses, resumes or deletes the saved copy of the current session.
+- **`/organism-setup`** (`/setup` in a clone install). Finds your vault and repos and
+  writes the one config file, asking before it writes anything.
+- **Publish guard.** Blocks a `git push`, deploy, upload or web request that would send a
+  term from your private blocked-words list. It fails closed: if it is set up but cannot
+  run, the command is blocked.
+- **Decision links.** `adr-link.sh` links commits to records with git notes, reads `ADR:`
+  trailers, backfills links from history and keeps the work bounded on large repositories.
+- **`organism` CLI.** Setup, status, doctor, update, uninstall and migrate, plus the
+  helpers the skills use.
+- **Doc check (experimental, off by default).** Keeps a status table per repo current in
+  the vault and warns when a check you added fails.
+- **Tests and CI.** One command, `bash claude/hooks/tests/run-all.sh`, runs the static
+  checks and every test; CI runs it on macOS and Linux.
+- Security policy, code of conduct, contributing guide, and issue and pull request
+  templates.

@@ -1,0 +1,29 @@
+# ~/.claude/state/agents.local  (host-local; gitignored, copy this, drop ".example")
+#
+# Host-local INSTANCE launchd agents: the standalone-agent analogue of the host-local paths.env.
+# launchd/install-agents.sh discovers this file GENERICALLY and renders each line into a
+# com.<ns>.<job> launchd agent. The published core names none of these instances.
+# The codename lives only here, on the host that runs it.
+#
+# Format (one agent per line):  job|role|exec-args|schedule|marker
+#   job        label suffix → com.organism.<job>
+#   role     ∈ per_host | singleton_bookkeeping | singleton_sideeffect   (role.py gates it)
+#   exec-args  command after run.sh; may use $HOOKS (deployed hooks dir) and $HOME.
+#              Whitespace-split into argv with globbing disabled: one token = one argv entry,
+#              no quoting, a token can NEVER contain a space, so a path with a space in it
+#              cannot be an arg.
+#   schedule ∈ keepalive | interval:<sec> | cal:<H>:<M> | calw:<weekday>:<H>:<M>
+#              An unrecognized token is skipped with a ⚠️ warning, the agent is NOT (re)rendered
+#              and any existing plist is left untouched.
+#   marker     OPTIONAL 5th field: the state/<marker>-last-success file this job writes on
+#              success. A 4-field line still parses, it just declares no marker.
+#              `install-agents.sh --freshness` derives the reconciler's freshness watch from
+#              these declarations, so a retired job leaves the watch by deleting its line.
+#              It is NOT always the job name: several jobs may share one marker (two
+#              instances of one script; a job and its --fallback partner). Declare only what
+#              the code ACTUALLY writes, a job that never calls jobstatus.mark_success()
+#              must leave this blank, or it reports "(never)" forever and means nothing.
+# Blank lines and #comments are ignored (leading whitespace tolerated).
+#
+# Example, a personal report kept under the gitignored hooks/local/ dir, run daily at 07:45:
+# myreport|singleton_bookkeeping|python3 $HOOKS/local/myreport.py|cal:7:45|myreport

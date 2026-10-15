@@ -1,0 +1,12 @@
+{
+  "_comment": "Per-device role declaration. Copy to ~/.claude/state/host.json (gitignored, per-machine), or let `host-role init` create it. A device with NO host.json runs per_host jobs ONLY; it can never double-run a singleton. Grant the singleton roles to exactly ONE device (the owner). platform_uuid pins ownership to this hardware: copying this file to a clone does NOT transfer ownership (the clone's IOPlatformUUID differs, so its singletons auto-demote). Manage with the host-role CLI; promotion is a deliberate release-then-claim ritual, never automatic.",
+  "host_id": "<hostid.sh id>",
+  "platform_uuid": "<hostid.sh uuid: full IOPlatformUUID; pins ownership to this Mac>",
+  "roles": {
+    "per_host": true,
+    "singleton_bookkeeping": false,
+    "singleton_sideeffect": false
+  },
+  "_schedules_comment": "OPTIONAL per-machine schedule overrides for install-agents.sh: map an agent's job name to a schedule token (keepalive | interval:<sec> | cal:<H>:<M> | calw:<weekday>:<H>:<M>). A job absent here keeps its committed default time; this only lets a machine RETUNE when a job runs, without editing committed code. Example: {\"reconcile\": \"cal:8:15\", \"logrotate\": \"calw:1:9:0\"}.",
+  "schedules": {}
+}

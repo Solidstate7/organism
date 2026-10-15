@@ -1,0 +1,10 @@
+{
+  "name": "organism",
+  "displayName": "Organism",
+  "version": "0.1.0",
+  "description": "Session notes in your vault, decision records with /handoff, a publish guard, and an optional doc check",
+  "author": { "name": "Solidstate7", "url": "https://github.com/Solidstate7" },
+  "homepage": "https://github.com/Solidstate7/organism",
+  "repository": "https://github.com/Solidstate7/organism",
+  "keywords": ["handoff", "adr", "obsidian", "session-notes", "publish-guard"]
+}

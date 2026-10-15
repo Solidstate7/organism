@@ -1,0 +1,7 @@
+{
+  "_comment": "guard-publish per-repo exemptions: a repo may carry its OWN codenames (private repos cross-referencing each other); a term listed here is exempt ONLY for pushes of that repo. Keys: absolute repo roots ($HOME/~ ok). Copy to ~/.claude/state/guard-exempt.json. Any parse error = no exemptions (guard stays strict).",
+  "~/dev/my-private-project": [
+    "my-private-project",
+    "its-codename"
+  ]
+}

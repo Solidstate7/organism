@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 440" width="840" height="440" role="img" aria-label="The loop: a session feeds session notes after every reply. /handoff writes the where-we-are note and the decision records, and the next session loads the note when it starts. Records link both ways to commits. Reconcile, an optional and experimental check, reads the commits, rewrites the doc page's machine-owned half, and warns you on a mismatch.">
+  <style>
+    :root{--bg:#F3F5F7;--surface:#FFFFFF;--ink:#1B222B;--muted:#5B6773;--line:#C3CCD5;--ok:#1F8A5B;--warn:#B26A12;--accent:#2B5F9E;--opt:#7A6400;--opt-soft:#FFF1A8}
+    @media (prefers-color-scheme:dark){:root{--bg:#14181D;--surface:#1C2229;--ink:#E6EAEE;--muted:#9AA6B2;--line:#3A4551;--ok:#4CC38A;--warn:#E0A24A;--accent:#7FB0E8;--opt:#EDD15A;--opt-soft:#36330F}}
+    text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+    .bg{fill:var(--bg)}
+    .box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+    .hot{stroke:var(--accent);stroke-width:2}
+    .t{fill:var(--ink);font-size:13px;font-weight:600}
+    .s{fill:var(--muted);font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .lbl{fill:var(--muted);font-size:11px}
+    .edge{stroke:var(--ink);stroke-width:1.2;fill:none}
+    #arr path{fill:var(--ink)}
+    .box.opt{fill:var(--bg);stroke-dasharray:5 4}
+    .edge.opt{stroke-dasharray:4 3}
+    .pill.opt{fill:var(--opt-soft)}
+    .pill-t.opt{fill:var(--opt);font-size:10.5px;font-weight:600}
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" width="840" height="440" rx="6"/>
+
+  <!-- row 1: the session -->
+  <rect class="box hot" x="315" y="40" width="210" height="76" rx="4"/>
+  <text class="t" x="331" y="63">You + agent in a session</text>
+  <text class="s" x="331" y="82">Claude Code, any repo</text>
+
+  <!-- session -> session notes -->
+  <path class="edge" d="M315,76 H125 V188" marker-end="url(#arr)"/>
+  <text class="lbl" x="220" y="70" text-anchor="middle">after every reply</text>
+
+  <!-- session -> where-we-are, and back -->
+  <path class="edge" d="M400,116 V188" marker-end="url(#arr)"/>
+  <text class="lbl" x="390" y="156" text-anchor="end">/handoff writes it</text>
+  <path class="edge" d="M440,190 V118" marker-end="url(#arr)"/>
+  <text class="lbl" x="450" y="156">loaded at the next start</text>
+
+  <!-- session -> decision records -->
+  <path class="edge" d="M525,76 H715 V188" marker-end="url(#arr)"/>
+  <text class="lbl" x="620" y="70" text-anchor="middle">/handoff harvests decisions</text>
+
+  <!-- row 2 -->
+  <rect class="box" x="20" y="190" width="210" height="76" rx="4"/>
+  <text class="t" x="36" y="211">Session notes</text>
+  <text class="s" x="36" y="228">one note per session</text>
+  <text class="s" x="36" y="242">plus a dashboard</text>
+  <text class="s" x="36" y="256">in your vault folder</text>
+
+  <rect class="box" x="315" y="190" width="210" height="76" rx="4"/>
+  <text class="t" x="331" y="211">"Where we are" note</text>
+  <text class="s" x="331" y="228">written only by /handoff</text>
+  <text class="s" x="331" y="242">stays as you left it</text>
+  <text class="s" x="331" y="256">HANDOFF.md, gitignored</text>
+
+  <rect class="box" x="610" y="190" width="210" height="76" rx="4"/>
+  <text class="t" x="626" y="211">Decision records (ADRs)</text>
+  <text class="s" x="626" y="228">docs/adr/NNNN-*.md</text>
+  <text class="s" x="626" y="242">one file per decision</text>
+  <text class="s" x="626" y="256">indexed from CLAUDE.md</text>
+
+  <!-- records <-> commits -->
+  <path class="edge" d="M715,266 V338" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text class="lbl" x="725" y="306">linked both ways</text>
+
+  <!-- row 3 -->
+  <rect class="box opt" x="20" y="340" width="210" height="76" rx="4"/>
+  <text class="t" x="36" y="361">Warning to you</text>
+  <text class="s" x="36" y="378">macOS notification,</text>
+  <text class="s" x="36" y="392">Telegram if set up,</text>
+  <text class="s" x="36" y="406">and at session start</text>
+
+  <rect class="box opt" x="315" y="340" width="210" height="76" rx="4"/>
+  <text class="t" x="331" y="361">Reconcile</text>
+  <rect class="pill opt" x="430" y="347" width="85" height="18" rx="9"/>
+  <text class="pill-t opt" x="505" y="360" text-anchor="end" textLength="65" lengthAdjust="spacingAndGlyphs">experimental</text>
+  <text class="s" x="331" y="378">optional · organism check</text>
+  <text class="s" x="331" y="392">rewrites the doc page's</text>
+  <text class="s" x="331" y="406">machine-owned half</text>
+
+  <rect class="box" x="610" y="340" width="210" height="76" rx="4"/>
+  <text class="t" x="626" y="361">Commits</text>
+  <text class="s" x="626" y="378">each names its record</text>
+  <text class="s" x="626" y="392">in a git note</text>
+
+  <!-- reconcile reads commits, warns on mismatch -->
+  <path class="edge opt" d="M525,378 H608" marker-end="url(#arr)"/>
+  <text class="lbl" x="566" y="370" text-anchor="middle">reads</text>
+  <path class="edge opt" d="M315,378 H232" marker-end="url(#arr)"/>
+  <text class="lbl" x="273" y="370" text-anchor="middle">on mismatch</text>
+</svg>

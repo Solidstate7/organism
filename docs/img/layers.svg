@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 376" width="840" height="376" role="img" aria-label="Four layers stacked: natural language, decision records, commits, code. Solid arrows go down for creation; dashed arrows go up for management.">
+  <style>
+    :root{--bg:#F3F5F7;--surface:#FFFFFF;--ink:#1B222B;--muted:#5B6773;--line:#C3CCD5;--ok:#1F8A5B;--warn:#B26A12;--accent:#2B5F9E}
+    @media (prefers-color-scheme:dark){:root{--bg:#14181D;--surface:#1C2229;--ink:#E6EAEE;--muted:#9AA6B2;--line:#3A4551;--ok:#4CC38A;--warn:#E0A24A;--accent:#7FB0E8}}
+    text{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+    .bg{fill:var(--bg)}
+    .box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+    .t{fill:var(--ink);font-size:13px;font-weight:600;letter-spacing:.04em}
+    .s{fill:var(--muted);font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .lbl{fill:var(--ink);font-size:11.5px}
+    .lbl.mu{fill:var(--muted)}
+    .cap{fill:var(--muted);font-size:11px;font-weight:600;letter-spacing:.1em}
+    .edge{stroke:var(--ink);stroke-width:1.2;fill:none}
+    .up{stroke:var(--muted);stroke-dasharray:4 4}
+    #arr path{fill:var(--ink)}
+    #arrm path{fill:var(--muted)}
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="arrm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bg" width="840" height="376" rx="6"/>
+
+  <text class="cap" x="318" y="24" text-anchor="end">CREATION, DOWNWARD</text>
+  <text class="cap" x="522" y="24">MANAGEMENT, UPWARD</text>
+
+  <!-- layer 1 -->
+  <rect class="box" x="200" y="36" width="440" height="56" rx="4"/>
+  <text class="t" x="216" y="59">NATURAL LANGUAGE</text>
+  <text class="s" x="216" y="78">what you say in a session: goals, corrections, decisions</text>
+
+  <path class="edge" d="M330,92 V122" marker-end="url(#arr)"/>
+  <text class="lbl" x="318" y="112" text-anchor="end">/handoff writes the decision down</text>
+  <path class="edge up" d="M510,124 V94" marker-end="url(#arrm)"/>
+  <text class="lbl mu" x="522" y="112">session notes hold the full conversation</text>
+
+  <!-- layer 2 -->
+  <rect class="box" x="200" y="124" width="440" height="56" rx="4"/>
+  <text class="t" x="216" y="147">DECISION RECORDS</text>
+  <text class="s" x="216" y="166">the why, numbered and dated · one ADR file per decision</text>
+
+  <path class="edge" d="M330,180 V210" marker-end="url(#arr)"/>
+  <text class="lbl" x="318" y="200" text-anchor="end">implementing commits are linked by git notes</text>
+  <path class="edge up" d="M510,212 V182" marker-end="url(#arrm)"/>
+  <text class="lbl mu" x="522" y="200">query: which decision asked for this commit?</text>
+
+  <!-- layer 3 -->
+  <rect class="box" x="200" y="212" width="440" height="56" rx="4"/>
+  <text class="t" x="216" y="235">COMMITS</text>
+  <text class="s" x="216" y="254">the changes · each one names the decision it carries out</text>
+
+  <path class="edge" d="M330,268 V298" marker-end="url(#arr)"/>
+  <text class="lbl" x="318" y="288" text-anchor="end">git applies the change</text>
+  <path class="edge up" d="M510,300 V270" marker-end="url(#arrm)"/>
+  <text class="lbl mu" x="522" y="288">"why does this line exist?"</text>
+
+  <!-- layer 4 -->
+  <rect class="box" x="200" y="300" width="440" height="56" rx="4"/>
+  <text class="t" x="216" y="323">CODE</text>
+  <text class="s" x="216" y="342">the implementation itself</text>
+</svg>

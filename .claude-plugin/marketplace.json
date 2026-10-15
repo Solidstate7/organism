@@ -1,0 +1,13 @@
+{
+  "name": "organism",
+  "description": "Organism as a Claude Code plugin",
+  "owner": { "name": "Solidstate7", "url": "https://github.com/Solidstate7" },
+  "plugins": [
+    {
+      "name": "organism",
+      "source": "./",
+      "category": "productivity",
+      "description": "Session notes in your vault, decision records with /handoff, a publish guard, and an optional doc check"
+    }
+  ]
+}

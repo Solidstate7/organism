@@ -1,0 +1,25 @@
+# .github/workflows/ci.yml: CI for Organism.
+# Runs the same one-command suite you run locally: static checks
+# (py_compile / bash -n / node --check) + every asserting test under
+# claude/hooks/tests/, via run-all.sh, on macOS (the supported platform) and on
+# Linux (the hooks themselves are portable). macOS-only bits (plutil lint;
+# launchctl is never reached under ORGANISM_DRY=1) self-skip off-macOS inside the
+# tests, and every test sandboxes HOME + its env seams into mktemp dirs, so
+# nothing touches the runner's real home. python3, node and git are preinstalled
+# on both runner images, so no setup steps are needed.
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: run the full suite (static checks + tests)
+        run: bash claude/hooks/tests/run-all.sh

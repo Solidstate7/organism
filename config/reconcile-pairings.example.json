@@ -1,0 +1,137 @@
+{
+  "_comment": "SANITIZED EXAMPLE. The real reconcile-pairings.json is gitignored and per-machine (it holds absolute repo and vault paths). Only the machine that runs the shared reconcile job needs it: copy this to ~/.claude/state/reconcile-pairings.json, fill the placeholders, and add one pair per project the reconciler should watch. Other machines need none of this. Placeholders: __HOME__ = your home dir; __VAULT_OPS__ = a folder in your Obsidian vault; __NAMESPACE__ = your launchd label namespace; __CODE_ROOT__ = absolute path to your code root (e.g. /Users/you/dev), used verbatim as the probes' cwd (no ~ or $VAR expansion), so it must be absolute.",
+  "queue_page": "__VAULT_OPS__/Reconcile Queue.md",
+  "pairs": [
+    {
+      "id": "harness",
+      "repo": "__HOME__/.claude",
+      "repo_short": "~/.claude",
+      "git": false,
+      "git_repo": "__HOME__/.organism",
+      "head_gated": true,
+      "page": "__VAULT_OPS__/Harness Status.md",
+      "intent_inject": false,
+      "heading": "## ⚙️ Built State: derived from ~/.claude",
+      "header_note": "> [!info] Machine-written, do not hand-edit\n> Filesystem inventory of `~/.claude` on {today}. Its code lives in the `~/.organism` git repo (symlinked in), pinned to commit `{head}`; a change that rode in on a commit/pull is intended, while an unexplained one (a hook/agent/command added or removed with no new commit) alarms in the reconcile queue. The prose above this fence is yours and is never machine-edited.",
+      "probes": {
+        "hooks": {
+          "cmd": "ls hooks/*.sh hooks/*.py hooks/*.js 2>/dev/null | xargs -n1 basename | sort | tr '\n' ' '"
+        },
+        "hook_count": {
+          "cmd": "ls hooks/*.sh hooks/*.py hooks/*.js 2>/dev/null | wc -l | tr -d ' '"
+        },
+        "commands": {
+          "cmd": "ls commands/*.md 2>/dev/null | xargs -n1 basename | sed 's/.md$//' | sort | tr '\n' ' '"
+        },
+        "launchd": {
+          "cmd": "launchctl list 2>/dev/null | grep -oE 'com\\.__NAMESPACE__\\.[a-zA-Z-]+' | sort -u | tr '\n' ' '",
+          "runtime": true
+        },
+        "global_hook": {
+          "cmd": "git config --global --get core.hooksPath 2>/dev/null || echo '(unset)'",
+          "runtime": true
+        },
+        "githooks": {
+          "cmd": "ls git-hooks/ 2>/dev/null | grep -v '^_dispatch' | wc -l | tr -d ' '"
+        },
+        "settings_hooks": {
+          "cmd": "python3 -c \"import json;print(' '.join(sorted((json.load(open('settings.json')).get('hooks',{})).keys())) or 'none')\""
+        }
+      },
+      "guards": {
+        "g_guardpublish": "grep -q guard-publish settings.json",
+        "g_globalhook": "git config --global --get core.hooksPath | grep -q git-hooks",
+        "g_injecthandoff": "test -f hooks/inject-handoff.sh"
+      },
+      "_job_freshness_sample": {
+        "_comment": "DISABLED PATTERN, kept OUTSIDE probes:/guards: on purpose: the engine executes every entry in those maps, so a sample parked inside them would run. Why: the launchd probe above only proves agent LABELS are loaded: a job that logs FATAL and exits 0 every day still lists identically, so silent job death is invisible to the self-watch. This pattern makes it visible via the last-success markers (~/.claude/state/<job>-last-success, written only on a confirmed-good run). To arm it: merge 'probes' below into the pair's probes:, 'guards' into guards:, append 'row' to rows:. The probe is volatile (the dates advance daily; display only, never alarms); the GUARD does the alarming: it trips when the daily marker's age exceeds 2 days, flipping the row to UNVERIFIED and raising a machine alarm exactly once on the fresh-to-stale transition.",
+        "probes": {
+          "job_freshness": {
+            "volatile": true
+          }
+        },
+        "guards": {},
+        "row": {
+          "component": "**Job freshness** (last-success markers)",
+          "status": "{job_freshness}",
+          "evidence": "`~/.claude/state/<job>-last-success`, read {job_freshness__at}: a silently dying job goes stale here",
+          "guard": "g_daily_review_fresh"
+        }
+      },
+      "rows": [
+        {
+          "component": "**Hooks** (`hooks/`)",
+          "status": "{hook_count} scripts",
+          "evidence": "`{hooks}`"
+        },
+        {
+          "component": "**Commands** (`commands/`)",
+          "status": "—",
+          "evidence": "`{commands}`"
+        },
+        {
+          "component": "**Scheduled agents** (launchd)",
+          "status": "loaded",
+          "evidence": "`{launchd}`"
+        },
+        {
+          "component": "**Global git-link hook**",
+          "status": "`{global_hook}`",
+          "evidence": "`core.hooksPath` → git-hooks/ ({githooks} symlinks)",
+          "guard": "g_globalhook"
+        },
+        {
+          "component": "**Wired Claude hooks** (`settings.json`)",
+          "status": "{settings_hooks}",
+          "evidence": "publish-guard + handoff-inject + mirror + session-end",
+          "guard": "g_guardpublish"
+        }
+      ],
+      "footer": [
+        "",
+        "*Drift here (a hook/agent/command added or removed, or the global hook unset) raises an alarm.*"
+      ]
+    },
+    {
+      "_comment": "REPO-CENSUS pair: one git-state row per repo under your code root, rendered onto the census page. Pattern: repo = your code root (git:false → always re-probe; probes are cheap git one-liners). DORMANT repos get non-volatile probes (any transition, such as a new commit or a dirtied tree, alarms: frozen means frozen). ACTIVE repos get volatile probes (display-only; give them their own bespoke pair for semantic alarms). The non-volatile 'inventory' probe alarms when a repo appears or vanishes, which is what keeps the repo watch complete as repos come and go.",
+      "id": "repos",
+      "repo": "__CODE_ROOT__",
+      "repo_short": "code root",
+      "git": false,
+      "page": "__VAULT_OPS__/Pairing List.md",
+      "intent_inject": false,
+      "heading": "## ⚙️ Built State: one row per repo under the code root",
+      "header_note": "> [!info] Machine-written section, do not hand-edit\n> Repo census taken {today} from the code root: one line of git state per managed repo. Dormant rows are pinned (any change alarms); active rows are display-only. Line format: `HEAD date · commits · tree state (· ↑unpushed,: = no upstream)`.",
+      "probes": {
+        "inventory": {
+          "cmd": "ls -d */ 2>/dev/null | LC_ALL=C sort | tr '\n' ' '"
+        },
+        "r_active_example": {
+          "cmd": "h=$(git -C my-active-repo log -1 --format='%h %ad' --date=short 2>/dev/null) || h='⚠️ no git'; c=$(git -C my-active-repo rev-list --count HEAD 2>/dev/null || echo '?'); n=$(git -C my-active-repo status --porcelain 2>/dev/null | wc -l | tr -d ' '); s=clean; [ \"$n\" -gt 0 ] 2>/dev/null && s=\"${n} dirty\"; u=$(git -C my-active-repo rev-list --count '@{u}..HEAD' 2>/dev/null || echo '—'); echo \"$h · ${c}c · $s · ↑$u\"",
+          "volatile": true
+        },
+        "r_dormant_example": {
+          "cmd": "h=$(git -C my-dormant-repo log -1 --format='%h %ad' --date=short 2>/dev/null) || h='⚠️ no git'; c=$(git -C my-dormant-repo rev-list --count HEAD 2>/dev/null || echo '?'); n=$(git -C my-dormant-repo status --porcelain 2>/dev/null | wc -l | tr -d ' '); s=frozen; [ \"$n\" -gt 0 ] 2>/dev/null && s=\"⚠️ ${n} uncommitted\"; echo \"$h · ${c}c · $s\""
+        }
+      },
+      "rows": [
+        {
+          "component": "**Inventory** (code root)",
+          "status": "`{inventory}`",
+          "evidence": "directory census, read {inventory__at}: a repo appearing or vanishing here alarms"
+        },
+        {
+          "component": "**my-active-repo** · active",
+          "status": "{r_active_example}",
+          "evidence": "display-only; give active repos their own bespoke pair for semantic alarms"
+        },
+        {
+          "component": "**my-dormant-repo** · dormant",
+          "status": "{r_dormant_example}",
+          "evidence": "pinned frozen: any change alarms"
+        }
+      ],
+      "footer": []
+    }
+  ]
+}

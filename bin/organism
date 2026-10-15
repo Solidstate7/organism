@@ -1,0 +1,86 @@
+#!/bin/sh
+# organism: single CLI entrypoint. Thin dispatcher over the repo's scripts:
+# every subcommand is one existing tool, so `organism <verb>` and the scripts
+# never drift apart. Installed as a symlink by bootstrap.sh (~/.local/bin).
+set -u
+
+# resolve the repo root through every symlink (~/.local/bin/organism may point at
+# another link); a relative link target is taken from the link's own directory
+SELF="$0"
+while [ -L "$SELF" ]; do
+  t="$(readlink "$SELF")"
+  case "$t" in /*) SELF="$t" ;; *) SELF="$(dirname "$SELF")/$t" ;; esac
+done
+REPO="$(cd "$(dirname "$SELF")/.." && pwd -P)"
+HOOKS="$REPO/claude/hooks"
+CLI="$REPO/claude/cli"
+
+# a plugin copy in Claude Code's cache has no background jobs and is updated by Claude Code
+copied() {
+  [ "$(python3 "$HOOKS/lib/where.py" mode 2>/dev/null)" = plugin-copied ] || return 1
+  echo "organism $1: this is the plugin copy Claude Code installed; $2" >&2
+  return 0
+}
+
+# colors: real terminal only (or CLICOLOR_FORCE=1), never under NO_COLOR
+if { [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; } || [ "${CLICOLOR_FORCE:-}" = "1" ]; then
+  B="$(printf '\033[1m')"; C="$(printf '\033[36m')"; G="$(printf '\033[32m')"
+  D="$(printf '\033[2m')"; X="$(printf '\033[0m')"
+else B=""; C=""; G=""; D=""; X=""; fi
+
+case "${1:-help}" in
+  setup)      shift; exec python3 "$HOOKS/organism-setup.py" "$@" ;;
+  incognito)  shift; exec python3 "$HOOKS/incognito.py" "$@" ;;
+  adr-link)   shift; exec bash "$HOOKS/adr-link.sh" "$@" ;;
+  guard-scan) shift; exec sh "$HOOKS/guard-publish.sh" --scan "$@" ;;
+  guard-status) exec sh "$HOOKS/guard-publish.sh" --status ;;
+  ack)        shift; exec python3 "$HOOKS/reconcile.py" --ack "$@" ;;
+  status)     copied status "it runs no background jobs (see: organism addon)" && exit 0
+              shift; MODE=status; [ "${1:-}" = "--all" ] && MODE=agents
+              exec python3 "$REPO/claude/cli/_render.py" "$MODE" "$REPO" ;;
+  agents)     exec python3 "$REPO/claude/cli/_render.py" agents "$REPO" ;;  # legacy alias of status --all
+  check)      shift; exec python3 "$HOOKS/reconcile.py" --all "$@" ;;
+  doctor)     python3 "$HOOKS/organism-setup.py" --section verify; rc=$?
+              python3 "$CLI/doctor.py" || rc=1; exit $rc ;;
+  test)       exec bash "$HOOKS/tests/run-all.sh" ;;
+  update)     copied update "update it with /plugin inside Claude Code" && exit 1
+              cd "$REPO" && exec git pull ;;   # the pull IS the deploy (post-merge hook converges)
+  start)      copied start "background jobs need a clone (see: organism addon)" && exit 1
+              shift; exec bash "$REPO/launchd/install-agents.sh" "$@" ;;
+  stop)       copied stop "it runs no background jobs" && exit 1
+              shift; exec bash "$REPO/launchd/uninstall-agents.sh" "$@" ;;
+  uninstall)  shift; exec python3 "$CLI/uninstall.py" "$@" ;;
+  migrate)    shift; exec python3 "$CLI/migrate.py" "$@" ;;
+  addon)      echo "${B}The macOS add-on${X} (background jobs, the ~/.claude links, \`organism\` in your terminal)"
+              echo "needs a clone, because launchd needs a path that survives plugin updates:"
+              echo "  1. ${G}git clone https://github.com/Solidstate7/organism.git ~/.organism${X}"
+              echo "  2. ${G}claude plugin uninstall organism@organism${X}   ${D}(the copied plugin)${X}"
+              echo "  3. ${G}bash ~/.organism/bootstrap.sh --plugin${X}      ${D}(loads the clone as the plugin, in place)${X}"
+              echo "Nothing is converted automatically." ;;
+  link)       echo "${B}Linking another machine: the safe path${X}"
+              echo "  ${D}full guide:${X} ${C}$REPO/docs/LINK-A-DEVICE.md${X}"
+              echo
+              sed '/^---$/,$d' "$REPO/docs/LINK-A-DEVICE.md" | \
+                sed -e "s/^## \(.*\)/${B}\1${X}/" -e "s/^# \(.*\)/${B}${C}\1${X}/" ;;
+  help|--help|-h|*)
+              case "${1:-help}" in help|--help|-h) ;; *) echo "organism: unknown command '$1'" >&2; exec >&2; rc=2 ;; esac
+              printf '%s\n' \
+                "${B}organism${X}: session notes, decision records, and an optional doc check" "" \
+                "  ${G}organism setup${X}       configure this machine ${D}(detects vault + repos, asks first)${X}" \
+                "  ${G}organism status${X}      every job: state, schedule, last success ${D}(--all: other machines too)${X}" \
+                "  ${G}organism check${X}       run the doc check now ${D}(experimental; turn it on in setup)${X}" \
+                "  ${G}organism update${X}      pull + redeploy ${D}(git pull is the deploy)${X}" \
+                "  ${G}organism doctor${X}      verify the installation" \
+                "  ${G}organism start${X}       schedule the background jobs ${D}(optional)${X}" \
+                "  ${G}organism stop${X}        unschedule them ${D}(everything still runs by hand)${X}" \
+                "  ${G}organism uninstall${X}   remove Organism from this machine ${D}(prints the plan; --yes applies)${X}" \
+                "  ${G}organism migrate${X}     --to-plugin: load this clone as a plugin ${D}(--to-symlink goes back)${X}" \
+                "  ${G}organism addon${X}       how to add the background jobs to a copied plugin install" \
+                "  ${G}organism test${X}        run the test suite" \
+                "  ${G}organism link${X}        add a second machine safely" "" \
+                "Used by the skills: ${G}incognito${X} [on|off|toggle|purge|status], ${G}adr-link${X} <cmd>," \
+                "${G}guard-scan${X} <files>, ${G}guard-status${X}, ${G}ack${X} (acknowledge the doc check's open alarms)" "" \
+                "Config lives in one gitignored file (${C}~/.claude/state/paths.env${X}); every key is" \
+                "optional. Docs: README.md · docs/ADVANCED.md"
+              exit "${rc:-0}" ;;
+esac
