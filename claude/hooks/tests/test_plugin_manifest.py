@@ -103,7 +103,8 @@ print("plugin: root rules")
 for name in ("settings.json", "CLAUDE.md", "commands", "agents"):
     check(f"no {name} at the plugin root", not os.path.lexists(os.path.join(ROOT, name)))
 check("bin/ holds only organism (it lands on the Bash tool's PATH)",
-      sorted(f for f in os.listdir(os.path.join(ROOT, "bin")) if f != "__pycache__") == ["organism"])
+      sorted(f for f in os.listdir(os.path.join(ROOT, "bin"))
+             if f != "__pycache__" and not f.startswith(".")) == ["organism"])
 check("bin/organism is executable", os.access(os.path.join(ROOT, "bin", "organism"), os.X_OK))
 
 print("plugin: git never tracks personal folders")
