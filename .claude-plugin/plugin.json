@@ -1,7 +1,7 @@
 {
   "name": "organism",
   "displayName": "Organism",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Keeps the reasons behind your code: session notes in your vault, decision records linked to the commits that carry them out, a where-we-are brief for the next session, and a publish guard.",
   "icon": "./docs/img/icon.png",
   "author": {

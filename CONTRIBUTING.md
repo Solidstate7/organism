@@ -3,6 +3,19 @@
 Thanks for helping. Bug reports, fixes and small focused features are all welcome. For a
 bigger change, open an issue first so we can agree on the shape before you build it.
 
+## Working on Organism
+
+Clone the repo and start a session with your clone loaded as the plugin:
+
+```sh
+git clone https://github.com/Solidstate7/organism.git
+claude --plugin-dir ./organism
+```
+
+That session runs the hooks and skills from your clone; a change shows up at the next
+session start. If you also have Organism installed from the marketplace, disable it
+first with `/plugin`, so its hooks don't run twice.
+
 ## Running the tests
 
 ```sh

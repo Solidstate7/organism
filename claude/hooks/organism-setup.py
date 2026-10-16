@@ -10,6 +10,7 @@ host-role / paths / install-agents; adds only the small missing writers.
   python3 ~/.claude/hooks/organism-setup.py            interactive (Enter keeps the shown value)
     --print / --dry-run   compute + show the paths.env/host.json/app.json diffs; write nothing
     --yes                 accept every default it shows (optional extras stay off), then write + apply
+    --doc-check           offer the experimental doc check with a yes default (with --yes: turn it on)
     --non-interactive     same as --yes
     --section <name>      run one section: identity|repos|vault|pairings|role|schedules|peers|creds|apply|verify
     --no-apply            do everything except the deploy.sh + install-agents.sh re-run
@@ -388,8 +389,8 @@ def sec_pairings(raw, mode, pu, args, code_root, repos, staged):
     say(f"Keeps a status table (latest commit, branch, uncommitted files, decision count) in one")
     say(f"page per repo under {homeify(wiki)}/Repos, current at every session end and on `organism check`.")
     say("It never reads your prose and warns only on checks you add yourself.")
-    if not confirm(f"Set up the doc check for {len(repos)} repo(s)?", False, mode):
-        say("off (turn it on later: organism setup --section pairings)")
+    if not confirm(f"Set up the doc check for {len(repos)} repo(s)?", bool(getattr(args, "doc_check", False)), mode):
+        say("off (turn it on later: organism setup --doc-check)")
         return
     ex = prompt("Any repos to leave out? (space-separated; empty = none)",
                 raw.get("CLAUDE_RECONCILE_EXCLUDE", ""), mode)
@@ -604,9 +605,8 @@ def apply(mode):
     if where.in_cache(REPO):
         # a plugin copy is replaced on every update: linking ~/.claude into it, or pointing
         # launchd at it, would break at the next update
-        say("this copy lives in Claude Code's plugin cache, so deploy.sh and install-agents.sh")
-        say("are not run from it. Your settings above are saved. For the background jobs and")
-        say("the `organism` command in your terminal, clone the repo and run bootstrap.sh there.")
+        say("this is the plugin Claude Code keeps in its plugin cache, so there is nothing")
+        say("else to apply. Your settings above are saved; the hooks read them from the next session on.")
         return
     for script in (os.path.join(REPO, "deploy.sh"), os.path.join(REPO, "launchd", "install-agents.sh")):
         name = os.path.basename(script)
@@ -631,9 +631,14 @@ def main():
     ap.add_argument("--section", choices=ALL_SECTIONS)
     ap.add_argument("--no-apply", dest="no_apply", action="store_true")
     ap.add_argument("--vault")
+    ap.add_argument("--doc-check", dest="doc_check", action="store_true")
     args = ap.parse_args()
     mode = "print" if args.dry else ("yes" if args.yes else ("noninteractive" if args.noninteractive else "interactive"))
     sections = [args.section] if args.section else ALL_SECTIONS
+    if not args.section and where.in_cache(REPO):
+        # a plugin copy runs no background jobs, so the role and schedule questions,
+        # which only steer those jobs, are left out
+        sections = [x for x in sections if x not in ("role", "schedules")]
     if mode == "interactive" and not sys.stdin.isatty() and set(sections) - READ_ONLY_SECTIONS:
         # No terminal to ask in (a script, a pipe, an agent's shell): input() would hit
         # EOF and every question would take its default, writing without asking.
@@ -749,7 +754,8 @@ def ready_card():
         say(f"Point me at any folder of notes:  {_C['G']}organism setup --vault ~/my-notes{_C['X']}")
     say("")
     say(f"{_C['B']}Try these:{_C['X']}")
-    say(f"  - {_C['G']}organism status{_C['X']}   see your background jobs (or that none are scheduled)")
+    if not where.in_cache(REPO):
+        say(f"  - {_C['G']}organism status{_C['X']}   see your background jobs (or that none are scheduled)")
     if os.path.exists(pairings_path()):
         say(f"  - {_C['G']}organism check{_C['X']}    refresh the doc check's status tables now")
     say(f"  - after a real coding session, run {_C['G']}/handoff{_C['X']} inside Claude Code:")

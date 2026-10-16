@@ -3,7 +3,7 @@
 Everything here is optional, opt-in, or only relevant once the basics have earned trust.
 The README covers the core; this page covers the rest. Each optional extra the README
 lists has a section here: [the publish guard](#the-publish-guard), [more than one
-Mac](#more-than-one-mac), [alerts](#alerts) and [the doc check](#the-doc-check-experimental).
+computer](#more-than-one-computer), [alerts](#alerts) and [the doc check](#the-doc-check-experimental).
 
 ## Decision records for old repos, and commits that explain themselves
 
@@ -37,8 +37,9 @@ one sentence: the doc check tells the truth about *now* and never needs the past
 
 ## The doc check (experimental)
 
-Off until you turn it on: setup asks "Set up the doc check for N repo(s)?" (default no), and
-`organism setup --section pairings` asks again later. Saying yes creates, in your vault's
+Off until you turn it on: ask `/organism-setup` for the doc check (it runs
+`organism setup --doc-check`), or answer yes when `organism setup` asks "Set up the doc
+check for N repo(s)?" in a terminal. Saying yes creates, in your vault's
 `wiki` folder (or the folder in `CLAUDE_VAULT_WIKI`):
 
 - one page per repo under `wiki/Repos/`. The top of the page is yours; below it, between
@@ -48,9 +49,8 @@ Off until you turn it on: setup asks "Set up the doc check for N repo(s)?" (defa
 - `~/.claude/state/reconcile-pairings.json`, which pairs each repo with its page (an older
   install may still have it in `~/.claude/hooks/`, which is read too).
 
-It runs when a Claude Code session in a paired repo ends, by hand with `organism check`
-on any Mac, and daily at 07:45 on the one Mac that owns the shared jobs (see [More than
-one Mac](#more-than-one-mac)). Each run logs to `~/.claude/logs/reconcile.log`.
+It runs when a Claude Code session in a paired repo ends, and by hand with
+`organism check`. Each run logs to `~/.claude/logs/reconcile.log`.
 
 The status rows only display; they never warn. A warning comes when a check you add
 yourself fails (a `guards` entry for that repo in `reconcile-pairings.json`), or when
@@ -58,79 +58,24 @@ something the check needs can't be read: a paired repo, its page, the markers on
 page, or the check's own state file. A warning reaches you three ways: as an alert (see
 [Alerts](#alerts)), in the Reconcile Queue page, and as one line at the start of every
 session until you clear it with `organism ack`. To drop
-that session-start line on one Mac, create `~/.claude/state/reconcile-reminder.off`.
+that session-start line on one computer, create `~/.claude/state/reconcile-reminder.off`.
 
 It does not read your prose. The table says what state the repo is in; whether the
 words above it still hold is yours to judge.
 
-## More than one Mac
+## More than one computer
 
-**The problem:** you work from two Macs. "Doesn't GitHub already solve that?" For the
-code, yes, and for nothing else. Three things never make it into a git remote:
+**The problem:** you work from two computers. "Doesn't GitHub already solve that?" For
+the code, yes, and for nothing else. The AI sessions themselves never reach a git
+remote: what you and the model worked through on the desktop doesn't exist on the
+laptop. The code arrives; the conversation that explains it doesn't.
 
-1. **The AI sessions themselves.** What you and the model worked through on the desktop
-   doesn't exist on the laptop. The code arrives; the conversation that explains it
-   doesn't.
-2. **The scheduled jobs.** Which machine runs the daily doc check: both? Neither?
-   Whichever you set up last?
-3. **The machine-local config** (paths, credentials, roles), which *shouldn't* travel.
-
-The answers, in the same order. Sessions are saved into the vault, and the vault syncs
-(Obsidian Sync, iCloud, anything), so **your conversation history merges across
-machines the way code merges in git**, and any machine can pick up a thread another
-machine started. The shared job runs only on the machine that claimed it. Config stays
-local by a deny-by-default gitignore. In plain terms:
-
-- **Identity is hardware, not config.** Each machine derives its identity from its
-  hardware UUID. Roles live in a local, gitignored `~/.claude/state/host.json`, and the
-  file pins that UUID, so *copying* your config to another Mac transfers nothing: the
-  copy's UUID doesn't match, and its shared jobs switch themselves off.
-- **Two kinds of jobs.** Per-machine jobs (the daily sync with the repo, the weekly log
-  cleanup) run on every machine, each on its own files. The shared job (the daily doc
-  check, which writes your vault) runs only on the one machine that claimed it. A new
-  machine claims nothing: setup's role question defaults to keeping the current role, and
-  `--yes` keeps it too. On your only Mac, answer `claim owner` to run the shared job there.
-- **Deploying to N machines is `git pull` on each.** The post-merge hook brings each
-  machine in line with the repo on its own. No deploy scripts, no drift between Macs.
-- **Adding a machine:** clone, `bash bootstrap.sh`, `organism setup` (keep the default
-  role), then follow `organism link` or [LINK-A-DEVICE.md](LINK-A-DEVICE.md).
-- **Moving the shared job** (new laptop, selling the old one): on the old machine run
-  `organism setup --section role` and answer `release`; then on the new one, the same
-  command and `claim owner`; then `organism start` on both to reload their jobs. Done in
-  that order, a move stopped halfway leaves neither machine running the job, never both.
-- **Personal jobs stay personal:** anything you don't want in a public manifest goes in a
-  gitignored `~/.claude/state/agents.local` on that machine, run by the same installer
-  with the same role checks.
-
-## What happens on `organism update`, exactly
-
-`organism update` is `git pull` in the repo, and the pull is the whole procedure. A
-`post-merge` hook (installed by `deploy.sh`, so a fresh clone gets it) runs
-**`converge.sh`**, "make this machine match what the repo says should exist": re-run the
-symlink deploy, regenerate the scheduled jobs from the manifest, unload any job the
-manifest no longer names. That's all "converge" ever means here.
-
-It exists because only *some* of the deploy follows a pull. The symlinked trees (`hooks/`,
-`commands/`, `git-hooks/`, `keybindings.json`) go live instantly.
-`settings.json` does not: it's generated as the committed base plus your gitignored
-`~/.claude/state/settings.local.json` overlay. Neither do the `launchd` plists. (When the
-clone is also loaded as a plugin, the hooks come from the plugin's `hooks/hooks.json`
-and `settings.json` carries none of them; the plugin picks up a pull at the next session
-start.)
-
-That last one fails **silently**, which is the real reason any of this exists. Because the
-hooks directory is a symlink into the repo, a pull that deletes a hook removes it from
-the live tree the moment it lands, while `launchd` keeps firing the plist it already
-holds, on schedule, at a script that is gone: a job neither running nor visibly dead.
-`install-agents.sh` sweeps any `com.organism.*` plist absent from both its manifest and
-your `agents.local`, and that sweep is the only thing that retires a job cleanly.
-
-Git hooks are best-effort, though: a GUI client, `git fetch && git reset --hard`, or a
-machine whose global `core.hooksPath` points at another tool's hooks will skip them. So
-a daily job **re-runs the same match-the-repo script on every machine**. The hook makes
-the common path correct; the timer makes the uncommon path survivable. Force it now with
-`bash converge.sh`; its dated success marker means a silently dead updater shows up as
-*stale*, not as nothing.
+**The answer:** sessions are saved into the vault, and the vault syncs (Obsidian Sync,
+iCloud, anything), so **your conversation history merges across machines the way code
+merges in git**, and any machine can pick up a thread another machine started. Each
+session note names the machine it ran on. Settings (paths, credentials) stay on each
+computer and never sync. To add one, install the plugin there and run `/organism-setup`;
+[LINK-A-DEVICE.md](LINK-A-DEVICE.md) has the details.
 
 ## Alerts
 
@@ -150,10 +95,6 @@ To set up Telegram, create a bot with BotFather, then save its token and your ch
 
 Then `chmod 600 ~/.claude/state/telegram-alerts.json`; setup's checklist checks both the
 keys and the permissions.
-
-The design rule everywhere: **silence means "the job didn't run", never "the alert
-channel died"**. The daily sync and the weekly log cleanup each write a dated success
-marker, and `organism status` shows one that went stale.
 
 ## The publish guard
 
@@ -219,7 +160,7 @@ against accidents, not a sandbox. The full rules are in
 ## `adr-link.sh`: the decision links by hand
 
 `/handoff` makes the links for you; this is the tool underneath, for when you want them
-by hand. In a repo:
+by hand. In a repo, `organism adr-link <command>`:
 
 - `query <N|hash>` returns the commits for a decision, or the decision for a commit.
 - `link <commit> <N…>` joins them by hand.
@@ -227,8 +168,5 @@ by hand. In a repo:
 - `backlinks write` rewrites the list of linked commits at the end of each record.
 
 A commit can also name its decision itself, with an `ADR: N` (or `ADR: none`) line at the
-end of its message. To be reminded of that line in every repo that has decision records,
-run `git config --global core.hooksPath ~/.claude/git-hooks` (clone install only: a plugin
-install has no such folder, and git then runs no hooks at all); the reminder only warns. To
-require it in one repo, install the hook that blocks a commit without it (the
+end of its message. To require it in one repo, install the hook that blocks a commit without it (the
 instructions are at the top of `claude/hooks/adr-link.sh`).

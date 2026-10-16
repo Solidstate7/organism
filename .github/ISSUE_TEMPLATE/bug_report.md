@@ -13,10 +13,10 @@ labels: bug
 2.
 
 **Your setup**
-- macOS version:
+- Operating system and version:
 - Claude Code version (`claude --version`):
-- How Organism is installed (plugin, or clone with the macOS add-on):
-- Output of `organism doctor`, if you have the add-on:
+- Organism version (shown by `/plugin`):
+- Output of `organism doctor` (ask Claude to run it):
 
 Please remove anything private (paths, project names, note contents) before posting.
 For a security problem, use the Security tab instead of an issue.

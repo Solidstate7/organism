@@ -35,7 +35,7 @@ case "${1:-help}" in
   guard-scan) shift; exec sh "$HOOKS/guard-publish.sh" --scan "$@" ;;
   guard-status) exec sh "$HOOKS/guard-publish.sh" --status ;;
   ack)        shift; exec python3 "$HOOKS/reconcile.py" --ack "$@" ;;
-  status)     copied status "it runs no background jobs (see: organism addon)" && exit 0
+  status)     copied status "it runs no background jobs" && exit 0
               shift; MODE=status; [ "${1:-}" = "--all" ] && MODE=agents
               exec python3 "$REPO/claude/cli/_render.py" "$MODE" "$REPO" ;;
   agents)     exec python3 "$REPO/claude/cli/_render.py" agents "$REPO" ;;  # legacy alias of status --all
@@ -45,25 +45,35 @@ case "${1:-help}" in
   test)       exec bash "$HOOKS/tests/run-all.sh" ;;
   update)     copied update "update it with /plugin inside Claude Code" && exit 1
               cd "$REPO" && exec git pull ;;   # the pull IS the deploy (post-merge hook converges)
-  start)      copied start "background jobs need a clone (see: organism addon)" && exit 1
+  start)      copied start "background jobs are not part of the plugin" && exit 1
               shift; exec bash "$REPO/launchd/install-agents.sh" "$@" ;;
   stop)       copied stop "it runs no background jobs" && exit 1
               shift; exec bash "$REPO/launchd/uninstall-agents.sh" "$@" ;;
   uninstall)  shift; exec python3 "$CLI/uninstall.py" "$@" ;;
   migrate)    shift; exec python3 "$CLI/migrate.py" "$@" ;;
-  addon)      echo "${B}The macOS add-on${X} (background jobs, the ~/.claude links, \`organism\` in your terminal)"
-              echo "needs a clone, because launchd needs a path that survives plugin updates:"
-              echo "  1. ${G}git clone https://github.com/Solidstate7/organism.git ~/.organism${X}"
-              echo "  2. ${G}claude plugin uninstall organism@organism${X}   ${D}(the copied plugin)${X}"
-              echo "  3. ${G}bash ~/.organism/bootstrap.sh --plugin${X}      ${D}(loads the clone as the plugin, in place)${X}"
-              echo "Nothing is converted automatically." ;;
-  link)       echo "${B}Linking another machine: the safe path${X}"
+  addon)      echo "Background jobs are not part of the plugin. The doc check runs when a session"
+              echo "ends and on ${G}organism check${X}." ;;
+  link)       echo "${B}Using Organism on another computer${X}"
               echo "  ${D}full guide:${X} ${C}$REPO/docs/LINK-A-DEVICE.md${X}"
               echo
               sed '/^---$/,$d' "$REPO/docs/LINK-A-DEVICE.md" | \
                 sed -e "s/^## \(.*\)/${B}\1${X}/" -e "s/^# \(.*\)/${B}${C}\1${X}/" ;;
   help|--help|-h|*)
               case "${1:-help}" in help|--help|-h) ;; *) echo "organism: unknown command '$1'" >&2; exec >&2; rc=2 ;; esac
+              if [ "$(python3 "$HOOKS/lib/where.py" mode 2>/dev/null)" = plugin-copied ]; then
+                printf '%s\n' \
+                  "${B}organism${X}: session notes, decision records, and an optional doc check" "" \
+                  "  ${G}organism setup${X}         configure this machine ${D}(/organism-setup runs it for you)${X}" \
+                  "  ${G}organism check${X}         run the doc check now ${D}(experimental; setup --doc-check turns it on)${X}" \
+                  "  ${G}organism ack${X}           clear the doc check's open warnings" \
+                  "  ${G}organism guard-status${X}  show whether the publish guard has terms to block" \
+                  "  ${G}organism doctor${X}        verify the installation" \
+                  "  ${G}organism uninstall${X}     remove Organism from this machine ${D}(prints the plan; --yes applies)${X}" \
+                  "  ${G}organism link${X}          use Organism on another computer" "" \
+                  "Update with /plugin inside Claude Code. Config lives in ${C}~/.claude/state/paths.env${X};" \
+                  "every key is optional."
+                exit "${rc:-0}"
+              fi
               printf '%s\n' \
                 "${B}organism${X}: session notes, decision records, and an optional doc check" "" \
                 "  ${G}organism setup${X}       configure this machine ${D}(detects vault + repos, asks first)${X}" \
@@ -75,9 +85,8 @@ case "${1:-help}" in
                 "  ${G}organism stop${X}        unschedule them ${D}(everything still runs by hand)${X}" \
                 "  ${G}organism uninstall${X}   remove Organism from this machine ${D}(prints the plan; --yes applies)${X}" \
                 "  ${G}organism migrate${X}     --to-plugin: load this clone as a plugin ${D}(--to-symlink goes back)${X}" \
-                "  ${G}organism addon${X}       how to add the background jobs to a copied plugin install" \
                 "  ${G}organism test${X}        run the test suite" \
-                "  ${G}organism link${X}        add a second machine safely" "" \
+                "  ${G}organism link${X}        use Organism on another computer" "" \
                 "Used by the skills: ${G}incognito${X} [on|off|toggle|purge|status], ${G}adr-link${X} <cmd>," \
                 "${G}guard-scan${X} <files>, ${G}guard-status${X}, ${G}ack${X} (acknowledge the doc check's open alarms)" "" \
                 "Config lives in one gitignored file (${C}~/.claude/state/paths.env${X}); every key is" \

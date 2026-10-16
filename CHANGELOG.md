@@ -4,6 +4,24 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-10-16
+
+### Changed
+
+- The plugin is the one install path in the docs. The README Quickstart is the two
+  install commands and `/organism-setup`. The clone install and its background jobs are
+  gone from the README and the docs (the code stays for now), `docs/LINK-A-DEVICE.md`
+  covers using the plugin on another computer, and CONTRIBUTING shows how to work on a
+  clone with `claude --plugin-dir`.
+- `/organism-setup` applies the plan when you say yes in the chat (it runs
+  `organism setup --yes`), so setup needs no terminal command. `organism setup
+  --doc-check` turns on the experimental doc check.
+- In a plugin install, `organism help`, `organism addon` and the setup output no longer
+  point to a clone, and setup skips the role and schedule questions, which only steer the
+  clone's background jobs.
+- The README merges "What you get" and "What it promises" into one list, and the docs no
+  longer describe adding your own scheduled jobs.
+
 ## [0.1.1] - 2026-10-16
 
 ### Changed

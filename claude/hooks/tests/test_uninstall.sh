@@ -118,7 +118,9 @@ t "the cache copy is left to Claude Code" '[ -f "$C/bin/organism" ]'
 out=$(run sh "$C/bin/organism" start 2>&1); rc=$?
 out2=$(run sh "$C/bin/organism" status 2>&1)
 t "organism status says a copied install has no jobs" 'printf "%s" "$out2" | grep -q "no background jobs"'
-t "organism start refuses in a copied install" '[ $rc -ne 0 ] && printf "%s" "$out" | grep -q "need a clone"'
+t "organism start refuses in a copied install" '[ $rc -ne 0 ] && printf "%s" "$out" | grep -q "not part of the plugin"'
+out=$(run sh "$C/bin/organism" help 2>&1)
+t "organism help in a copied install names no clone-only verb" '! printf "%s" "$out" | grep -qE "organism (start|stop|update|migrate|addon|status)"'
 
 echo "uninstall: --purge-state"
 H="$TMP/home5"; mkdir -p "$H/.claude/state"

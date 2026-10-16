@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/Solidstate7/organism/actions/workflows/ci.yml/badge.svg)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
-![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
+![Platform: macOS | Linux](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)
 
 **Vibe coding is dead. Lost reasons are dead.** Organism is the layer that carries what
 you *intend* down into what gets *implemented*, and keeps the two joined. Call it
@@ -55,77 +55,23 @@ it explains.
 
 ## Quickstart
 
-There are two ways in. The plugin is the quick one: session notes, `/handoff`, the
-publish guard and the "where we are" note, with nothing outside Claude Code's own
-folders. The clone adds the background jobs and an `organism` command in your terminal,
-and needs macOS for the jobs.
-
-### As a Claude Code plugin
-
 ```sh
 claude plugin marketplace add Solidstate7/organism
 claude plugin install organism@organism
 ```
 
 (Inside a session, `/plugin marketplace add Solidstate7/organism` and
-`/plugin install organism@organism` do the same.) Start a new session, then run
-`/organism-setup`: it shows what setup found (your vault, your repos) and how to apply
-it. Until a vault is set, session notes are off; `/handoff` works from the start, and
-the publish guard as soon as you give it terms to block. Update with `/plugin` inside
-Claude Code.
+`/plugin install organism@organism` do the same.) Then start a new session and run
+`/organism-setup`. It shows what it found (your vault, your repos) and applies it when
+you say yes. It looks for your vault in `~/Projects`, `~/Documents`, Obsidian's iCloud
+folder and your home folder; if yours is somewhere else, tell it where. Any folder of
+markdown works.
 
-Claude Code keeps the installed plugin as a copy in `~/.claude/plugins/cache`, so the
-`organism` command is on the PATH of Claude's own shell but not of your terminal.
-Setup asks before it writes and needs a terminal to ask in, so apply it from your
-terminal through that copy:
-
-```sh
-"$(ls -d ~/.claude/plugins/cache/organism/organism/*/ | tail -1)bin/organism" setup
-```
-
-`organism addon` prints how to move to a clone later, for the background jobs.
-
-### From a clone (macOS)
-
-```sh
-git clone https://github.com/Solidstate7/organism.git ~/.organism
-bash ~/.organism/bootstrap.sh    # checks tools, links the hooks into ~/.claude, installs the CLI
-organism setup                   # finds your vault + repos, asks, then writes the config
-```
-
-Add `--plugin` to the bootstrap line to also load the clone as a plugin, in place: the
-plugin then supplies the hooks and slash commands, and your clone stays the code they
-run. Depending on its version, Claude Code may also keep a local copy of the plugin
-under `~/.claude/plugins/cache` (not synced); edit and pull in the clone, never in
-that copy. A clone already installed without `--plugin` moves over with
-`organism migrate --to-plugin`, which shows each step and can be undone with
-`organism migrate --to-symlink`.
-
-Bootstrap puts the `organism` command in `~/.local/bin`. If your shell can't find it,
-add that folder to your PATH; bootstrap prints the line to add.
-
-Bootstrap takes over part of `~/.claude`: `hooks`, `commands`, `git-hooks` and
-`keybindings.json` become links into this repo (with `--plugin`, `commands` is left
-out), and anything already there is moved to a `.pre-organism.bak` copy. Without
-`--plugin` it also merges its hooks into `~/.claude/settings.json`: your settings and
-your own hook entries are kept, and the original file is copied to
-`settings.json.pre-organism.bak`. Hook scripts you keep in `~/.claude/hooks` are not:
-that folder becomes a link, so its old contents move to
-`~/.claude/hooks.pre-organism.bak`, and a settings entry that runs a script from there
-stops working until you move the script somewhere else and update the entry's path. It
-schedules two background jobs as well (see [Requirements](#requirements)).
-`organism uninstall` prints what it would undo, and `organism uninstall --yes` undoes it.
-
-Setup looks for your vault in `~/Projects`, `~/Documents`, Obsidian's iCloud folder and
-your home folder; `--vault <dir>` names any folder of markdown instead. It asks before it
-writes anything, and without a terminal to ask in it writes nothing. `--yes` accepts the
-defaults it shows, and `/organism-setup` (`/setup` in a clone installed without
-`--plugin`) shows the same plan inside a session. Every config key is optional: a
-missing key falls back to a default or turns its feature off.
-
-From then on, the only habit is running `/handoff` at the end of a session that made a
-decision ([what it does](#what-handoff-does)); the hooks do the rest. To update a clone,
-run `git pull` in `~/.organism`.
+Until a vault is set, session notes are off. `/handoff` works from the start, and the
+publish guard as soon as you give it terms to block. From then on, the only habit is
+running `/handoff` at the end of a session that made a decision
+([what it does](#what-handoff-does)); the hooks do the rest. Update or remove Organism
+with `/plugin` inside Claude Code.
 
 ## What /handoff does
 
@@ -140,36 +86,32 @@ exists to prevent. Amber: the only two places it may ask you something. Green: t
 approval step. Yellow: optional. Dashed boxes touch git and are skipped outside a
 repository.
 
-### What you get
+### What you get, and what it promises
 
-| Output | Where | What it is |
-|---|---|---|
-| Decision records | `docs/adr/NNNN-title.md` (or the repo's existing ADR folder) | One file per decision: the situation, the choice, what it costs and enables, the alternatives. Dated, numbered in order. |
-| Decisions index | `CLAUDE.md`, "Decisions" section | One line per record for the newest twenty or so, newest first, with a link to the rest. Loaded at the start of every session, so the project's decisions are known before the first prompt. |
-| Links | git notes on the commits | Each record lists the commits that carry it out. Each commit names its record. Ask a commit "why do you exist", ask a record "what did you become". |
-| The brief | `HANDOFF.md` | Where things stand, what is live, what comes next. Kept out of git; loaded into the next session automatically. |
-
-### What it promises
-
-- **Order.** The commits that implement a decision always sit before the record that
-  explains it. History reads as cause, then effect.
-- **Touch.** It writes the record files, the index, and the brief, and adds the brief
-  (and, if you agree, generated data) to `.gitignore`. It never edits code.
-- **Brief.** This command is the only thing that writes the brief; nothing overwrites it
-  between runs. Skip the run and the next session still gets the brief as you left it,
-  plus a list of the sessions that came after it, each with a link to its saved session
-  note.
-- **Git.** It commits on the current branch and never pushes unless instructed. Outside
-  a git repository it still writes the records and the brief and skips the git steps.
-- **Scope.** Only this project's decisions are recorded. A decision that belongs to
-  another project is named in the draft and left for that project's own run. Records
-  describe situations, never account numbers, addresses or names.
-- **Records.** It never renumbers, rewrites, or deletes an existing record. A wrong
-  record is superseded by a new one, and both stay on file.
-- **Honesty.** A rebuilt record is labeled "reconstructed" and names its sources.
-  Nothing is invented. A session with no decision produces only the brief.
-- **Questions.** At most two, both conditional, marked amber in the diagram. It never
-  asks "approve this?".
+- **Decision records** in `docs/adr/NNNN-title.md` (or the repo's existing ADR folder).
+  One file per decision: the situation, the choice, what it costs and enables, the
+  alternatives. Dated and numbered in order. A record is never renumbered, rewritten or
+  deleted: a wrong one is superseded by a new record, and both stay on file.
+- **Decisions index** in `CLAUDE.md`, under "Decisions". One line per record for the
+  newest twenty or so, newest first, with a link to the rest. Loaded at the start of
+  every session, so the project's decisions are known before the first prompt.
+- **Links** as git notes on the commits. Each record lists the commits that carry it out,
+  and each commit names its record: ask a commit "why do you exist", ask a record "what
+  did you become". The commits that implement a decision always land before the record
+  that explains it, so history reads as cause, then effect.
+- **The brief** in `HANDOFF.md`: where things stand, what is live, what comes next. Kept
+  out of git and loaded into the next session automatically. Only `/handoff` writes it.
+  Skip a run and the next session still gets the brief as you left it, plus links to the
+  saved notes of the sessions that came after it.
+- **Limits.** It writes only the records, the index, the brief and `.gitignore` (adding
+  the brief and, if you agree, generated data), and never edits code. It commits on the
+  current branch and never pushes unless you ask; outside a git repository it skips the
+  git steps. It records only this project's decisions (another project's is named in the
+  draft and left for that project's own run) and describes situations, never account
+  numbers, addresses or names. A rebuilt record is labeled "reconstructed" and names its
+  sources; nothing is invented. It asks at most two questions, both conditional and
+  marked amber in the diagram, and never asks for approval. A session with no decision
+  produces only the brief.
 
 ### How to run it
 
@@ -257,10 +199,10 @@ what is copied and how to keep a project out.
 |---|---|---|
 | `/handoff` | Commit the work, write the decision records, link them to commits, rewrite the "where we are" note | `--retro`, or a free-text note: see [How to run it](#how-to-run-it) |
 | `/incognito` | Control the saved copy of the session | `on` · `off` · `toggle` · `purge` (delete this session's saved copy and stop saving) · `status` (default) |
-| `/organism-setup` | Show this machine's configuration and how to apply it (`/setup` in a clone installed without `--plugin`) | none |
+| `/organism-setup` | Show what setup found and apply it when you say yes | none |
 
-With the plugin, `/organism:handoff` and `/organism:incognito` work too, in case another
-plugin also has a `/handoff`.
+`/organism:handoff` and `/organism:incognito` work too, in case another plugin also has a
+`/handoff`.
 
 ### Hooks that just run (no interaction)
 
@@ -270,13 +212,12 @@ plugin also has a `/handoff`.
 | note loading | session start | Loads the repo's "where we are" note, then lists the sessions that ran after it was written, each with a link to its saved copy |
 | session close | session end | Adds the final exchange to this session's saved copy, and runs the doc check if the repo is set up for it |
 | publish guard | before `Bash`, connector, web fetch and web search tool calls | Blocks pushes, deploys, web requests and publishing connector calls that contain terms from the blocked list (see below) |
-| post-merge sync | after `git pull` (clone install) | Updates the machine to match the repo |
 
-### In a terminal
+### The `organism` command
 
-Bootstrap also installs an `organism` command for setup and maintenance; `organism help`
-lists what it does. With the plugin alone, the same command runs from the plugin's copy
-(see [Quickstart](#as-a-claude-code-plugin)); the background-job verbs say they need a clone.
+The plugin also puts an `organism` command on the path of Claude's own shell, for setup
+and maintenance (`organism doctor` checks the install, `organism guard-status` shows
+whether the guard has terms). Ask Claude to run `organism help` for the full list.
 
 ## Requirements
 
@@ -284,15 +225,11 @@ lists what it does. With the plugin alone, the same command runs from the plugin
 |---|---|
 | Claude Code ≥ 2.1.295 | Everything: the hooks and the slash commands run inside it. Older versions let a call through when the guard times out |
 | git, python3 ≥ 3.9 | The main system. It only uses the standard library, with nothing to install through pip |
-| macOS | The clone install's background jobs (`launchd`) and notifications. The hooks are tested on macOS and Linux |
+| macOS or Linux | The hooks are tested on both. Alerts show as notifications on macOS |
 | node | The publish guard. Without node, while your blocked list has terms, the guard blocks every call it checks (and alerts once a day) until you install node or empty the list. An empty list never needs node |
 
-Everything else is optional. In a clone install, up to three jobs run on macOS's
-`launchd`: a daily check that the machine matches the repo and a weekly log cleanup,
-which bootstrap schedules, and the experimental doc check, which runs daily only on a
-Mac you pick in setup. `organism stop` removes them, and each also runs by hand. Without
-Telegram, alerts show as macOS notifications. Without Obsidian, any folder of markdown
-files works as the vault: point setup at it with `--vault`.
+Everything else is optional. Without Telegram, alerts show as macOS notifications.
+Without Obsidian, any folder of markdown files works as the vault.
 
 ## Optional extras
 
@@ -305,14 +242,14 @@ Each has a section in [docs/ADVANCED.md](docs/ADVANCED.md).
   deploy, the folder it sends; for `curl`, `wget` and `gh`, the files they upload. It is
   a guard against accidents, not against someone set on leaking. An empty list blocks
   nothing.
-- **More than one Mac.** Sync the vault (Obsidian Sync or any file sync) and your session
-  notes follow you. The one shared job, the daily doc check, runs only on the Mac you
-  pick, and setup never picks one for you, so nothing runs twice.
+- **More than one computer.** Install the plugin on each one and sync the vault (Obsidian
+  Sync or any file sync): your session notes follow you, each headed with the machine it
+  ran on.
 - **Telegram alerts.** Warnings on your phone, with delivery confirmed.
 - **Doc check (experimental).** Off until you say yes to it in setup. Keeps a status
   table on one vault page per repo current: latest commit, branch, uncommitted files,
-  decision count. It runs when a session in that repo ends, daily on the Mac you pick, or
-  by hand with `organism check`. It does not read your prose. It warns only when a check
+  decision count. It runs when a session in that repo ends, or by hand with
+  `organism check`. It does not read your prose. It warns only when a check
   you added fails, or when something it needs (a paired repo, its page, its own state)
   can't be read.
 

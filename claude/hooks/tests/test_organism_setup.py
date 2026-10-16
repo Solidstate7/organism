@@ -262,6 +262,27 @@ def test_wizard_end_to_end():
         shutil.rmtree(h, ignore_errors=True)
 
 
+def test_doc_check_flag():
+    import shutil
+    print("--doc-check: the doc check on a yes given in chat (/organism-setup)")
+    h = _fresh_home()
+    try:
+        if os.path.exists(os.path.join(HOOKS, "reconcile-pairings.json")):
+            print("  - this clone has its own pairings file: doc-check flag checks skipped")
+            return
+        before = _state(h)
+        r = _run(h, ["--print", "--doc-check"])
+        check("--print --doc-check plans the doc check", "doc check →" in r.stdout)
+        check("…and writes nothing", _state(h) == before)
+        r = _run(h, ["--yes", "--doc-check", "--no-apply"])
+        st = _state(h)
+        check("--yes --doc-check writes the pairings file", r.returncode == 0 and st["pairings"])
+        check("…and a page per repo in the vault's wiki folder",
+              os.path.isfile(os.path.join(h, "Documents", "MyVault", "wiki", "Repos", "app.md")))
+    finally:
+        shutil.rmtree(h, ignore_errors=True)
+
+
 def test_apply_from_plugin_cache():
     print("organism-setup: apply from a plugin cache copy")
     import subprocess
@@ -304,6 +325,7 @@ if __name__ == "__main__":
     test_hostjson()
     test_appjson_and_organs()
     test_wizard_end_to_end()
+    test_doc_check_flag()
     test_apply_from_plugin_cache()
     print(f"\n{'ALL PASS' if not _fails else 'FAILED: ' + ', '.join(_fails)}")
     sys.exit(1 if _fails else 0)
