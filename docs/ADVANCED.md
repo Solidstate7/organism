@@ -15,6 +15,12 @@ brand-new repo just starts at record 0001; the tool detects which case it is in.
 way, every record is **linked to the commits that carry it out, both directions**: ask a
 commit "why do you exist", ask a decision "what did you become".
 
+Rebuilt records are inferred from commit logs, old session transcripts and in-repo docs,
+and their links to commits are attached after the fact. Each record names its sources and
+marks what is verbatim, what is post-hoc and what is inferred. Treat an inferred intent
+as a hypothesis to check against the code and the people who were there, not as the
+decision itself.
+
 ## Nothing here is a prerequisite for anything else
 
 A natural worry: "do I need decision records before the doc check works?" No. Each part
