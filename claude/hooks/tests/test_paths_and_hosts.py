@@ -90,6 +90,7 @@ def transcript(path, cwd, excluded_file):
         ("t26", "mcp__claude_ai_Gmail__reply", {"id": "m1", "body": "ok"}, "sent"),
         ("t27", "mcp__claude_ai_Vercel__create_observability_query", {"q": "x"}, "created"),
         ("t28", "Bash", {"command": "cp a.txt b.txt", "description": "Copy a relative file"}, "ok"),
+        ("t29", "mcp__claude_ai_Claude_Docs__batch", {"container": {"kind": "project"}, "batch": []}, "created"),
     ]
     lines = [entry(1, "user", "Do the things.", cwd)]
     blocks = [{"type": "text", "text": "Starting."}]
@@ -192,6 +193,7 @@ try:
     for part in ("notion-create-view", "Gmail__reply", "create_observability_query"):
         c = by_title(cs, part)[0]
         check("a connector write (%s) is outbound by its first verb" % part, "- outbound: remote" in c)
+    check("a no-verb name that writes (Claude Docs batch) is outbound", "- outbound: remote" in by_title(cs, "Claude_Docs__batch")[0])
 
     print("commands")
     check("a push is outbound", "- outbound: remote" in by_title(cs, "Push main")[0])
@@ -204,7 +206,7 @@ try:
     for part in ("List open PRs", "Look at the vercel folder", "List branches", "Copy locally"):
         c = by_title(cs, part)[0]
         check("%s: no outbound and no local mark" % part, "outbound" not in c and "git: local" not in c)
-    check("eleven outbound marks in all", doc.count("- outbound: remote") == 11)
+    check("twelve outbound marks in all", doc.count("- outbound: remote") == 12)
 
     print("the publish-class name test equals the guard's")
     m1 = re.search(r'OUTBOUND_TOOL_RE = re\.compile\(r"([^"]+)", re\.I\)', read(MIRROR))

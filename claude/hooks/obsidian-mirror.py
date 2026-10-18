@@ -367,7 +367,9 @@ WRITE_VERBS = {"deploy", "publish", "push", "release", "gist", "upload", "create
                "cancel", "archive", "restore", "accept", "approve", "complete", "activate", "revoke", "assign",
                "invalidate", "stage", "promote", "rollback", "pause", "unpause", "kill", "stop", "start", "run",
                "spawn", "duplicate", "convert", "add", "remove", "edit", "rename", "transfer", "buy", "verify",
-               "authorize", "record", "rerequest", "retry", "extend", "insert", "append", "submit", "invite"}
+               "authorize", "record", "rerequest", "retry", "extend", "insert", "append", "submit", "invite",
+               # names with no verb that write all the same (Claude Docs `batch` creates and edits a doc)
+               "batch", "execute", "exec", "import", "sync"}
 
 
 def connector_writes(toolpart):
