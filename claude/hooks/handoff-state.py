@@ -286,6 +286,12 @@ def print_state(root, kind, save=True):
     if g:
         for k in ("branch", "head", "head_subject", "upstream", "ahead", "behind", "pushed", "dirty"):
             out.append("%s=%s" % (k, g[k]))
+        if brief_text is not None:
+            # commits since the brief was last written: with dirty=0 and no decision, the
+            # session wrote nothing, which the report says in one line (the brief is still written)
+            since = datetime.datetime.fromtimestamp(os.path.getmtime(brief)).strftime("%Y-%m-%dT%H:%M:%S")
+            n = git(root, "rev-list", "--count", "HEAD", "--since=" + since)
+            out.append("commits_since_brief=" + (n if n.isdigit() else "unknown"))
     sessions = sessions_since(root, os.path.getmtime(brief)) if brief_text is not None else None
     out.append("sessions_since=" + (str(len(sessions)) if sessions is not None else "unknown"))
     out.append("")

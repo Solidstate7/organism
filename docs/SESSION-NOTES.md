@@ -45,8 +45,16 @@ Four rules keep a long session readable:
 - **Claude's prose is the spine.** It is kept in full and inline. Everything else folds.
 - **Each tool call is one collapsed callout.** The title is the tool's icon, its name, and
   a one-line label: the command's description, the file path, or the search pattern. The
-  body is the output only; the input is dropped. A failed call uses a `[!failure]-`
-  callout, so errors stand out while the page is still folded.
+  body opens with what the call touched, when there is something to say. The paths it
+  read or wrote come first; a path under a folder that opted out shows as `[excluded]`.
+  Then the hosts it reached: a browser call inherits the host its tab last opened, and a
+  query string is never copied. A browser action carries the browser's own one-line
+  description, marked "as described by the session" because nothing checks it. A
+  connector call names its connector. Anything outbound is marked: `outbound: remote`
+  for a push, a deploy, a web fetch, a page opened in the browser or a connector call
+  that sends or publishes; `git: local` for a commit. Then the output. The rest of the
+  input is dropped. A failed call uses a `[!failure]-` callout, so errors stand out while
+  the page is still folded.
 - **Big pastes fold too.** A prompt over 40 lines collapses into a quote callout titled by
   what it was: an injected skill payload, or pasted context with its first heading and
   line count. What you actually asked stays visible above it.
@@ -62,8 +70,9 @@ same lines are ordinary blockquotes.
 
 The notes hold your prompts and Claude's replies in full. For each tool call they hold
 its title (the command's description, the command itself, the file path or the search
-pattern) and its output, clipped at 3,000 characters or 60 lines. The rest of a tool's
-input is not copied. `latest.md` and the hidden `.sessions.json` beside it also keep
+pattern), the paths and hosts it touched, the browser's description of its action and the
+outbound mark, as above, and its output, clipped at 3,000 characters or 60 lines. The rest
+of a tool's input is not copied. `latest.md` and the hidden `.sessions.json` beside it also keep
 each session's last prompt for the table.
 
 Before anything is written, common secrets are replaced with `[redacted:<kind>]`: API

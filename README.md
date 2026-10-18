@@ -145,7 +145,8 @@ and it names its decision, so a change with no decision behind it stands out.
 
 Each session is copied into your vault's `_claude-live` folder after every reply, as
 plain markdown optimised for Obsidian: your prompts and Claude's replies in full, each
-tool call folded to one line.
+tool call folded to one line with the paths it touched, the hosts it reached and a mark
+on anything outbound (a push, a deploy, a web fetch, a connector call that sends).
 
 | File | What it holds | Open it when |
 |---|---|---|
@@ -154,7 +155,8 @@ tool call folded to one line.
 
 Common secrets (API keys, tokens, private keys, passwords in URLs) are redacted before
 anything is written. This is best effort, not a guarantee. A project can opt out with an
-empty `.organism-no-notes` file. `/incognito on` keeps a stretch of work out of the
+empty `.organism-no-notes` file, and a path under such a folder shows as `[excluded]` in
+any other session's notes. `/incognito on` keeps a stretch of work out of the
 notes, and `/incognito purge` deletes what the current session has saved so far and
 stops saving until `/incognito off`.
 [docs/SESSION-NOTES.md](docs/SESSION-NOTES.md) shows the format and lists exactly what is

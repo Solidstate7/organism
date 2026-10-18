@@ -329,8 +329,11 @@ def tool_title(name, inp):
         for key in ("description", "command", "file_path", "path",
                     "pattern", "query", "url", "prompt"):
             if inp.get(key):
+                val = str(inp[key])
+                if key == "url":
+                    val = re.split(r"[?#]", val, 1)[0]   # the query string stays out of the notes
                 # redacted before cell() cuts it, so the cut can't keep part of a secret
-                return f"{name} · {cell(mirror.redact_head(str(inp[key]), 4096)[0], 70)}"
+                return f"{name} · {cell(mirror.redact_head(val, 4096)[0], 70)}"
     return name
 
 
@@ -345,8 +348,100 @@ def local_ts(iso):
         return iso
 
 
+# ---- what a call touched: paths, hosts, the browser's own description, outbound ----------
+# One short list above a call's output, only when there is something to say. The rest of
+# the input is still dropped. OUTBOUND_TOOL_RE is the publish-class name test the publish
+# guard applies to connector tools (guard-publish.js, toolCall); test_paths_and_hosts.py
+# asserts the two copies stay equal.
+OUTBOUND_TOOL_RE = re.compile(r"deploy|publish|push|release|gist|upload|create|update|post|send|comment|issue|message|commit|merge|share", re.I)
+PUBLISH_CMD_RE = re.compile(r"\bgit\s+push\b|\bgh\s+(?:pr|release|repo|gist|issue|api)\b|\bnpm\s+publish\b"
+                            r"|\bcargo\s+publish\b|\btwine\s+upload\b|\bdocker\s+push\b|\bvercel\b"
+                            r"|\bnetlify\s+deploy\b|\bscp\s|\brsync\s", re.I)
+LOCAL_CMD_RE = re.compile(r"\bgit\s+(?:commit|merge|rebase|branch|checkout|switch|tag|stash)\b")
+PATH_KEYS = ("file_path", "path", "notebook_path", "filePath")
+CMD_PATH_RE = re.compile(r"(?<![\w.-])(?:~|/)[\w./@-]+")
+MAX_TRACE_PATHS = 5
+MAX_TRACE_SUMMARIES = 3
+_TAB_URL = {}   # tabId -> the URL last opened in that browser tab, for the session being rendered
+
+
+def _host(url):
+    m = re.match(r"^[a-z][a-z0-9+.-]*://(?:[^/?#@]*@)?([^/?#:]+)", str(url or ""), re.I)
+    return m.group(1).lower() if m else ""
+
+
+def _collect(inp, key, out):
+    """Every value of `key` in a tool input, nested actions included (browser_batch)."""
+    if isinstance(inp, dict):
+        v = inp.get(key)
+        if isinstance(v, (str, int)) and str(v).strip():
+            out.append(str(v).strip())
+        for v in inp.values():
+            _collect(v, key, out)
+    elif isinstance(inp, list):
+        for v in inp:
+            _collect(v, key, out)
+    return out
+
+
+def trace_lines(name, inp):
+    """What the call touched: the paths it read or wrote (one under a folder that opted
+    out of the notes shows as [excluded]), the hosts it reached (a browser call inherits
+    the host its tab last opened), the browser's own description of its action, the
+    connector's name, and an outbound mark (remote: a push, deploy, web fetch, a page
+    opened in the browser, a connector call that sends or publishes; local: a commit).
+    Empty for a plain read or a local command, so most callouts stay as they were."""
+    if not isinstance(inp, dict):
+        return []
+    lines = []
+    paths = [str(inp[k]).strip() for k in PATH_KEYS if isinstance(inp.get(k), str) and inp[k].strip()]
+    cmd = inp.get("command") if name == "Bash" and isinstance(inp.get("command"), str) else None
+    if cmd:
+        paths += CMD_PATH_RE.findall(cmd)
+    shown = []
+    for p in paths:
+        label = "[excluded]" if mirror.notes_excluded(os.path.expanduser(p)) else "`%s`" % p
+        if label not in shown:
+            shown.append(label)
+        if len(shown) >= MAX_TRACE_PATHS:
+            break
+    if shown:
+        lines.append("paths: " + ", ".join(shown))
+    is_chrome = name.startswith("mcp__claude-in-chrome__")
+    hosts = []
+    url = inp.get("url")
+    if isinstance(url, str) and _host(url):
+        hosts.append(_host(url))
+        if is_chrome:
+            for t in _collect(inp, "tabId", []):
+                _TAB_URL[t] = url
+    elif is_chrome:
+        for t in _collect(inp, "tabId", []):
+            h = _host(_TAB_URL.get(t))
+            if h and h not in hosts:
+                hosts.append(h)
+    if hosts:
+        lines.append("hosts: " + ", ".join(hosts))
+    server = name.split("__")[1] if name.startswith("mcp__") and not is_chrome and name.count("__") >= 2 else ""
+    if server:
+        lines.append("connector: " + server)
+    sums = _collect(inp, "action_summary", [])
+    if sums:
+        lines.append("as described by the session: " + "; ".join('"%s"' % s for s in sums[:MAX_TRACE_SUMMARIES])
+                     + (" …" if len(sums) > MAX_TRACE_SUMMARIES else ""))
+    outbound = (name in ("WebFetch", "WebSearch") or (is_chrome and name.endswith("navigate"))
+                or (bool(server) and bool(OUTBOUND_TOOL_RE.search(name)))
+                or (bool(cmd) and bool(PUBLISH_CMD_RE.search(cmd))))
+    if outbound:
+        lines.append("outbound: remote")
+    elif cmd and LOCAL_CMD_RE.search(cmd):
+        lines.append("git: local")
+    return [redact(ln) for ln in lines]
+
+
 def render_tool(name, inp, out, is_error):
-    """One collapsed callout; body is output-only (input dropped). The output is
+    """One collapsed callout: what the call touched (trace_lines, when there is something
+    to say), then the output only (the rest of the input is dropped). The output is
     redacted before it is clipped, so the clip can't leave part of a secret behind."""
     icon = TOOL_ICON.get(name, "🔧")
     ctype = "failure" if is_error else "note"
@@ -355,7 +450,9 @@ def render_tool(name, inp, out, is_error):
         body = fence(clip(text, MAX_TOOL_OUTPUT, MAX_TOOL_OUTPUT_LINES, cut))
     else:
         body = "_(no output)_"
-    return blockquote(f"[!{ctype}]- {icon} {tool_title(name, inp)}\n\n{body}")
+    trace = trace_lines(name, inp)
+    head = ("\n".join("- " + ln for ln in trace) + "\n\n") if trace else ""
+    return blockquote(f"[!{ctype}]- {icon} {tool_title(name, inp)}\n\n{head}{body}")
 
 
 def _fold_title(lines, n, skill=None):
@@ -700,6 +797,7 @@ def render_session_file(entries, short, project, incog_rec=None, machine=None,
     byte-identically to the pre-marker format."""
     skill_map = build_skill_map(entries)
     is_incog = _incognito_checker(incog_rec)
+    _TAB_URL.clear()   # a browser tab's last URL is remembered within one session only
     out = [mirror.session_h1(short, project), ""]
     if machine:
         out += [mirror.machine_line(machine), ""]

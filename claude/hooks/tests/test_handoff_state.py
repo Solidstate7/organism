@@ -99,6 +99,7 @@ try:
           d.get("upstream") == "origin/main" and d.get("ahead") == "1"
           and d.get("behind") == "0" and d.get("pushed") == "no")
     check("one dirty file", d.get("dirty") == "1" and "?? notes.txt" in out)
+    check("commits since the brief: none (the commits are dated before it)", d.get("commits_since_brief") == "0")
     check("the pushed commit the brief names: exists, pushed",
           ("%s exists=yes  pushed=yes  feat: first" % A) in out)
     check("the invented hash: exists=no", "ffffff1 exists=no" in out)
