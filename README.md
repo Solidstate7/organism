@@ -32,7 +32,7 @@ until you say yes.
 A vault is any folder of markdown, and Obsidian is optional. Setup looks for one in
 `~/Projects`, `~/Documents`, Obsidian's iCloud folder and your home folder. If yours is
 somewhere else, tell it the path. Until a vault is set, session notes stay off; `/handoff`
-works from the start.
+works from the start in any git repo, and anywhere inside the vault once one is set.
 
 After that, the only habit is running `/handoff` at the end of a session that made a
 decision. The hooks do the rest. Update or remove Organism with `/plugin`.
@@ -87,7 +87,7 @@ repository.
 | `docs/adr/NNNN-title.md` (or the repo's existing ADR folder) | One decision per file: the situation, the choice, what it costs and enables, the alternatives. Numbered in order and dated. |
 | `CLAUDE.md`, under "Decisions" | One line per record, newest first, the 20 most recent plus a link to the rest. Claude Code loads `CLAUDE.md` at every session start, so the decisions are known before the first prompt. |
 | git notes on the commits | The link between a record and its commits. Each record lists its commits, and each commit names its record. |
-| `HANDOFF.md` | The brief: where things stand, what's live, what comes next. Gitignored, and loaded into the next session automatically. |
+| `HANDOFF.md` | The brief: where things stand, what's live, what comes next. Kept out of git in a repo, written at the vault root outside one, and loaded into the next session automatically. |
 
 A record is never renumbered, rewritten or deleted. A wrong one is superseded by a new
 record, and both stay on file. The commits that carry out a decision land before the
@@ -101,8 +101,9 @@ brief as you left it, plus links to the saved notes of the sessions that came af
 - It writes only the records, the index, the brief and `.gitignore`; in a vault also a page
   listing every record, and after a rebuild of old history a marker file in the records
   folder. It never edits code.
-- It commits on the current branch and never pushes unless your note asks it to. Outside
-  a git repository it skips the git steps.
+- It commits on the current branch and never pushes unless your note asks it to. Inside a
+  vault but outside a git repository it writes the records and the brief at the vault root
+  and skips the git steps. Outside both it writes nothing and says so.
 - It records only this project's decisions. A decision about another project is named in
   the draft and left for that project's own run.
 - Records describe situations, never account numbers, addresses or names. A secret in the

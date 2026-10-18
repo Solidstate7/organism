@@ -17,7 +17,7 @@ Helper commands are `organism <verb>` (`adr-link`, `adr-index`, `handoff-state`,
 
 ## 0. Root, state, mode
 
-`pwd`, and `git rev-parse --show-toplevel` in a git repo: that directory is `<root>`. Everything below is relative to it, never a subdirectory, never `$HOME`.
+Run `organism handoff-state`. Its `root` is `<root>`: the git top level, else the vault root (the configured vault, or the nearest folder above the start folder holding `.obsidian` or `docs/adr`), and `root_kind` says which (`git`, `vault`, `none`). `root_kind=none` means neither: say "no repository and no vault above this folder; /handoff writes nothing here" and stop. Everything below is relative to `<root>`, never a subdirectory, never `$HOME`.
 
 Run `organism adr-link state` (it classifies a non-git root honestly) and act on its keys:
 
@@ -109,7 +109,7 @@ Only when `$ARGUMENTS` explicitly asks ("push", "and push", "push to origin"; "d
 
 ## 2. Rewrite HANDOFF.md
 
-Run `organism handoff-state` once, before writing. It prints the facts the brief may state (branch, HEAD, upstream, ahead and behind, pushed or not, the dirty files, the last 8 commits, every hash the current brief names with whether it exists and is pushed, the sessions active since the brief was written, the decision-link state) and saves a copy of the current brief for step 6. Every hash, branch and pushed-or-not claim in the brief is copied from that output; a fact it doesn't show is not written. Outside a git repo it says so: write no git block. An action outside git (a page published, a mail sent, a deploy) has no script proof: write it as "as described by the session" unless its outcome was checked (the live page, the sent mail), and say which.
+Run `organism handoff-state` again, before writing (HEAD moved if 0.5 or 1g committed). It prints the facts the brief may state (branch, HEAD, upstream, ahead and behind, pushed or not, the dirty files, the last 8 commits, every hash the current brief names with whether it exists and is pushed, the sessions active since the brief was written, the decision-link state) and saves a copy of the current brief for step 6. Every hash, branch and pushed-or-not claim in the brief is copied from that output; a fact it doesn't show is not written. Outside a git repo it says so: write no git block. An action outside git (a page published, a mail sent, a deploy) has no script proof: write it as "as described by the session" unless its outcome was checked (the live page, the sent mail), and say which.
 
 Read the existing brief to carry the standing backlog forward, then overwrite `<root>/HANDOFF.md` wholesale with, in order:
 

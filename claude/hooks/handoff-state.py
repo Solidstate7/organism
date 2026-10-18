@@ -6,6 +6,8 @@ brief never carries a hash, a branch or a pushed-or-not claim written from memor
   organism handoff-state --check    compare the rewritten brief with the saved copy
   organism handoff-state --root DIR
 
+The root is the git top level, else the vault root (the configured CLAUDE_VAULT_ROOT, or the
+nearest folder above holding .obsidian or docs/adr), else none: one brief per repo or vault.
 The state: root, vault, branch, HEAD, upstream, ahead and behind, dirty files, the brief and
 when it was written, every hash the brief names (exists? pushed?), the sessions active since
 the brief was written, the remotes (credentials stripped), and `adr-link state`.
@@ -54,14 +56,22 @@ def git(root, *args):
 
 
 def find_root(start):
+    """(root, kind): the git top level ('git'); else the vault root ('vault'); else the
+    start folder itself ('none'), where /handoff writes no brief. One brief per repo or
+    vault, so a run from a vault subfolder never leaves a brief that hides the vault's."""
     start = os.path.realpath(start)
     top = git(start, "rev-parse", "--show-toplevel")
-    return (os.path.realpath(top), "git") if top else (start, "dir")
+    if top:
+        return os.path.realpath(top), "git"
+    vault = vault_of(start)
+    if vault:
+        return vault, "vault"
+    return start, "none"
 
 
 def vault_of(root):
     """The vault holding root: CLAUDE_VAULT_ROOT when root is under it, else the nearest
-    ancestor (root included) with an .obsidian folder."""
+    ancestor (root included) holding an .obsidian folder or a docs/adr folder."""
     try:
         import pathsenv
         v = pathsenv.read_raw().get("CLAUDE_VAULT_ROOT", "")
@@ -72,7 +82,7 @@ def vault_of(root):
         pass
     d = root
     while True:
-        if os.path.isdir(os.path.join(d, ".obsidian")):
+        if os.path.isdir(os.path.join(d, ".obsidian")) or os.path.isdir(os.path.join(d, "docs", "adr")):
             return d
         parent = os.path.dirname(d)
         if parent == d:
@@ -247,6 +257,8 @@ def print_state(root, kind, save=True):
     out = ["root=" + root, "root_kind=" + kind, "vault=" + ("yes" if vault else "no")]
     if vault:
         out.append("vault_root=" + vault)
+    if kind == "none":
+        out.append("no repository and no vault above this folder: /handoff writes no brief here")
     if brief_text is not None:
         out.append("brief=" + brief)
         out.append("brief_written=" + fmt_time(os.path.getmtime(brief)))
