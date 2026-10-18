@@ -31,7 +31,9 @@ ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 ENV.update(HOME=HOME, ORGANISM_STATE_DIR=os.path.join(HOME, ".claude", "state"),
            GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull,
            GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@test.invalid",
-           GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@test.invalid")
+           GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@test.invalid",
+           # pinned dates: the same hashes on every run, so a check never depends on luck
+           GIT_AUTHOR_DATE="2026-01-01T00:00:00+0000", GIT_COMMITTER_DATE="2026-01-01T00:00:00+0000")
 
 
 def git(cwd, *args):
@@ -116,7 +118,7 @@ try:
     print("check after a rewrite")
     with open(brief, "w") as f:
         f.write("# HANDOFF — repo\n\n2026-10-19\n\nHEAD `%s`, pushed and in sync with origin. "
-                "`%s` was pushed earlier. `ffffff1` again.\n\n## Next / open threads\n\n"
+                "`%s` was pushed earlier. `ffffff1` again. Date 20261018.\n\n## Next / open threads\n\n"
                 "1. Migrate the queue consumer to the new broker (started)\n"
                 "2. Re-run the load test against staging\n\n## How to use this file\n\nfooter\n"
                 % (B, A))
@@ -125,6 +127,7 @@ try:
     check("the unpushed HEAD called pushed is flagged", ("%s unpushed, but the brief calls it pushed" % B) in out)
     check("the pushed commit is not flagged", ("%s unpushed" % A) not in out)
     check("the invented hash is flagged", "ffffff1 missing" in out)
+    check("an all-digit token that is no commit is not reported missing", "20261018 missing" not in out)
     check("the dropped thread is listed", "Write the runbook for the weekly export job" in out)
     check("a kept thread, reworded, is not listed", "Migrate the queue consumer" not in out.split("## dropped", 1)[1])
     check("the summary counts the claims", "2 hash claim(s) don't hold" in out)

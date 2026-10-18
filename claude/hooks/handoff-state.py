@@ -31,7 +31,7 @@ try:
 except Exception:  # the lib is beside this file; a copy without it still prints git facts
     where = None
 
-HASH_RE = re.compile(r"(?<![0-9A-Za-z/_.-])(?=[0-9a-f]*[a-f])([0-9a-f]{7,40})(?![0-9A-Za-z])")
+HASH_RE = re.compile(r"(?<![0-9A-Za-z/_.-])([0-9a-f]{7,40})(?![0-9A-Za-z])")
 PUSHED_WORDS = re.compile(r"\b(pushed|in sync|on origin|upstream|published)\b", re.I)
 NOT_PUSHED = re.compile(r"\b(not pushed|unpushed|no push|never pushed|local only|not yet pushed"
                         r"|ahead of|pushed nothing|without pushing)\b", re.I)
@@ -125,23 +125,32 @@ def read(path):
         return None
 
 
-def hashes_in(text):
+def hashes_in(text, root=None):
+    """Hash-shaped tokens of the text, in order. An all-digit token (a date, a count, or
+    one short hash in about 25) counts only when git knows it as a commit, so a date is
+    never listed and never reported missing; a token with a letter is always listed."""
     seen, out = set(), []
     for m in HASH_RE.finditer(text or ""):
         h = m.group(1)
-        if h not in seen:
-            seen.add(h)
-            out.append(h)
+        if h in seen:
+            continue
+        seen.add(h)
+        if h.isdigit() and not (root and commit_exists(root, h)):
+            continue
+        out.append(h)
         if len(out) >= MAX_HASHES:
             break
     return out
 
 
+def commit_exists(root, h):
+    return subprocess.run(["git", "-C", root, "cat-file", "-e", h + "^{commit}"],
+                          capture_output=True).returncode == 0
+
+
 def commit_facts(root, h, upstream, has_remote):
     """(exists, pushed, subject) for one hash. pushed: yes|no|no-remote."""
-    exists = subprocess.run(["git", "-C", root, "cat-file", "-e", h + "^{commit}"],
-                            capture_output=True).returncode == 0
-    if not exists:
+    if not commit_exists(root, h):
         return False, "", ""
     subject = git(root, "show", "-s", "--format=%s", h)
     if not has_remote:
@@ -293,7 +302,7 @@ def print_state(root, kind, save=True):
         out.extend(g["remotes"] or ["(none)"])
         out.append("")
         out.append("## hashes named in the brief")
-        hs = hashes_in(brief_text)
+        hs = hashes_in(brief_text, root)
         for h in hs:
             exists, pushed, subject = commit_facts(root, h, g["upstream"] != "none" and g["upstream"], g["has_remote"])
             out.append("%s exists=%s%s" % (h, "yes" if exists else "no",
@@ -337,7 +346,7 @@ def check(root, kind):
         g = git_facts(root)
         up = g["upstream"] != "none" and g["upstream"]
         print("## hashes")
-        hs = hashes_in(new)
+        hs = hashes_in(new, root)
         for h in hs:
             exists, pushed, subject = commit_facts(root, h, up, g["has_remote"])
             if not exists:
