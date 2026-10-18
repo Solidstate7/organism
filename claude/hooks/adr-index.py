@@ -32,7 +32,7 @@ FM_TAG = re.compile(r"adr/([a-z-]+)")
 TITLE = re.compile(r"^#\s+(.*\S)\s*$", re.M)
 NUM_PREFIX = re.compile(r"^\d{4,}\.\s*")
 SUPERSEDED_BY = re.compile(r"superseded by\s+(?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(?:ADR-|DEC-)?(\d{4,}))", re.I)
-MOC_LINE = re.compile(r"^- \[\[([^\]|]+)\|DEC-(\d{4,})\]\]")
+MOC_LINE = re.compile(r"^- \[\[(\d{4,})-[^\]|]*(?:\|[^\]]*)?\]\]")   # with or without the DEC alias
 OLDER = re.compile(r"^_Older decisions", re.M)
 MAX_LINE = 160
 
@@ -173,18 +173,21 @@ def existing_moc(path):
         return "", {}, [], {}
     header_end = re.search(r"^## ", text, re.M)
     header = text[:header_end.start()] if header_end else ""
-    kept, order, extras, key = {}, [], {}, ""
+    kept, order, extras, key, seen_entry = {}, [], {}, "", False
     for ln in text.splitlines():
         h = re.match(r"^##\s+(.+?)\s*$", ln)
         if h:
             key = section_key(h.group(1))
             order.append((key, h.group(1).strip()))
+            seen_entry = False
             continue
         m = MOC_LINE.match(ln)
         if m:
-            kept[int(m.group(2))] = (ln, key)
+            kept[int(m.group(1))] = (ln, key)
+            seen_entry = True
         elif key and ln.strip():
-            extras.setdefault(key, []).append(ln)
+            # a note keeps its place: before the entries or after them
+            extras.setdefault(key, {"before": [], "after": []})["after" if seen_entry else "before"].append(ln)
     return header, kept, order, extras
 
 
@@ -233,7 +236,8 @@ def cmd_moc(root, write, project):
         if key not in sections and key not in extras:
             continue
         heading = headings.get(key) or CANON.get(key) or key.capitalize()
-        body = sections.get(key, []) + extras.get(key, [])
+        ex = extras.get(key, {"before": [], "after": []})
+        body = ex["before"] + sections.get(key, []) + ex["after"]
         parts.append("\n## " + heading + "\n\n" + "\n".join(body) + "\n")
     page = "".join(parts)
     if write:

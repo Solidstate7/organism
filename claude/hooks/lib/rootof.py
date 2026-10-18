@@ -63,11 +63,13 @@ def _not_home(path):
 
 
 def obsidian_vault_of(start):
+    """The vault that decides the record style. A home vault counts here (a repo inside
+    it writes vault-style records); only the brief's root (find_root) treats $HOME as none."""
     start = os.path.realpath(start)
     v = configured_vault()
     if _under(start, v):
-        return _not_home(v)
-    return _not_home(_ancestor_with(start, (".obsidian",)))
+        return v
+    return _ancestor_with(start, (".obsidian",))
 
 
 def vault_root_of(start):
@@ -94,4 +96,4 @@ def find_root(start):
 if __name__ == "__main__":
     s = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
     root, kind = find_root(s)
-    print("%s\t%s\t%s" % (root, kind, obsidian_vault_of(s) or "-"))
+    print("%s\t%s\t%s" % (root, kind, obsidian_vault_of(s) or "-"))   # a home vault prints as the vault

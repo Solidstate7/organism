@@ -36,9 +36,22 @@ import rootof
 # "defaced" is not one), not part of a longer word, a path or a UUID (a hyphen on either
 # side rules it out). An all-digit token counts only when git knows it as a commit.
 HASH_RE = re.compile(r"(?<![0-9A-Za-z/_.-])(?=[0-9a-f]*[0-9])([0-9a-f]{7,40})(?![0-9A-Za-z-])")
-# A token the repository doesn't know is reported only on a line that talks about commits.
+# A token the repository doesn't know is reported only where the brief treats it as a commit:
+# on a line with commit words, in backticks, opening a bullet, or followed by a commit
+# subject (`feat(x):`, `fix:`). The pointer's session lines (an 8-character id between
+# centre dots, a note path, "last prompt") are never commit lines.
 COMMIT_CONTEXT = re.compile(r"\b(?:commits?|HEAD|hash(?:es)?|pushed|unpushed|push|merged?|branch(?:es)?"
                             r"|origin|upstream|rebased?|tagged?|revert(?:ed)?|cherry-pick|ahead|behind)\b", re.I)
+POINTER_LINE = re.compile(r"_claude-live|last prompt|sessions/|\s·\s`[0-9a-f]{8}`")
+
+
+def commit_shaped(h, line):
+    if POINTER_LINE.search(line) and not COMMIT_CONTEXT.search(line):
+        return False
+    return bool(COMMIT_CONTEXT.search(line)
+                or re.search(r"`" + h + r"`", line)
+                or re.match(r"^\s*(?:[-*+]|\d+[.)])\s+`?" + h + r"\b", line)
+                or re.search(h + r"`?\s+\w+(?:\([^)]*\))?:", line))
 PUSHED_WORDS = re.compile(r"\b(?:pushed|in sync|on origin|published)\b", re.I)
 NOT_PUSHED = re.compile(r"\b(?:not pushed|unpushed|no push|never pushed|local only|not yet pushed|pushed nothing"
                         r"|without pushing|ahead(?: of [^,;.\n]*?)? (?:by )?[1-9]\d*"
@@ -118,7 +131,7 @@ def hashes_in(text, root=None, ignore=()):
             seen.add(h)
             if root and commit_exists(root, h):
                 out.append((h, line))
-            elif not h.isdigit() and COMMIT_CONTEXT.search(line):
+            elif not h.isdigit() and commit_shaped(h, line):
                 out.append((h, line))
             if len(out) >= MAX_HASHES:
                 return out

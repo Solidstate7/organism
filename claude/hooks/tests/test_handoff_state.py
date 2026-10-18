@@ -126,7 +126,10 @@ try:
     print("check after a rewrite")
     with open(brief, "w") as f:
         f.write("# HANDOFF — repo\n\n2026-10-19\n\nHEAD `%s`, pushed and in sync with origin. "
-                "`%s` was pushed earlier. Commit `fff1fff` again. Date 20261018.\n\n## Next / open threads\n\n"
+                "`%s` was pushed earlier. Commit `fff1fff` again. Date 20261018.\n"
+                "- `eee2eee` feat(handoff): an invented one in a bullet\n- a1b2c3d fix: another, bare\n"
+                "- 2026-10-18 01:55 · `ac7a37ce` · MacBook Air, last prompt: hi → `/v/_claude-live/sessions/ac7a37ce.md`\n"
+                "\n## Next / open threads\n\n"
                 "1. Migrate the queue consumer to the new broker (started)\n"
                 "2. Re-run the load test against staging\n\n## How to use this file\n\nfooter\n"
                 % (B, A))
@@ -135,10 +138,12 @@ try:
     check("the unpushed HEAD called pushed is flagged", ("%s unpushed, but the brief calls it pushed" % B) in out)
     check("the pushed commit is not flagged", ("%s unpushed" % A) not in out)
     check("the invented hash is flagged", "fff1fff missing" in out)
+    check("an invented hash opening a commit bullet, backticked or bare, is flagged", "eee2eee missing" in out and "a1b2c3d missing" in out)
+    check("the pointer's session id is still not flagged", "ac7a37ce missing" not in out)
     check("an all-digit token that is no commit is not reported missing", "20261018 missing" not in out)
     check("the dropped thread is listed", "Write the runbook for the weekly export job" in out)
     check("a kept thread, reworded, is not listed", "Migrate the queue consumer" not in out.split("## dropped", 1)[1])
-    check("the summary counts the claims", "2 hash claim(s) don't hold" in out)
+    check("the summary counts the claims", "4 hash claim(s) don't hold" in out)
 
     print("check with a clean brief")
     with open(brief, "w") as f:
@@ -226,7 +231,7 @@ try:
     H = os.path.join(HOME, "somewhere")
     os.makedirs(H)
     d = kv(tool(H)[1])
-    check("a vault that is $HOME counts as none: no brief in ~/HANDOFF.md", d.get("root_kind") == "none" and d.get("vault") == "no")
+    check("a vault that is $HOME counts as none for the brief, while the style stays vault", d.get("root_kind") == "none" and d.get("vault") == "yes")
     os.remove(os.path.join(HOME, ".claude", "state", "paths.env"))
 finally:
     shutil.rmtree(T, ignore_errors=True)

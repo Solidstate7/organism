@@ -105,14 +105,19 @@ try:
     for n in ("0004-heading-first.md", "0005-callout-first.md", "0006-empty-decision.md"):
         os.remove(os.path.join(adr, n))
 
-    print("moc keeps section spelling, order and the lines that are not entries")
+    print("moc keeps section spelling, order and the lines that are not entries, in place")
     write(os.path.join(adr, "0004-data-model.md"), VAULT_REC % ("data-model", "2026-03-01", "0004", "Tables not documents", "Tables."))
     write(os.path.join(adr, "_decisions-moc.md"),
           "---\ntags: [adr, moc]\n---\n# Decisions — My Project\n\n> [!info] c\n\n## Data Model\n\n"
-          "A note under the heading, kept.\n\n## Accepted\n\n- [[0001-keep-notes-plain|DEC-0001]] — curated · 2026-02-01\n")
+          "A note under the heading, kept.\n\n## Accepted\n\n- [[0001-keep-notes-plain|DEC-0001]] — curated · 2026-02-01\n"
+          "- [[0003-sync-by-obsidian-sync]] — an alias-less line, still this record's\n\nA closing note.\n")
     rc, out, err = tool("moc", "--root", P)
     check("the heading keeps its spelling and comes first as before", out.index("## Data Model") < out.index("## Accepted"))
-    check("the record with that status lands under it, and the note stays", "## Data Model\n\n- [[0004-data-model|DEC-0004]] — Tables · 2026-03-01\nA note under the heading, kept." in out)
+    check("a note before the entries stays before them", "## Data Model\n\nA note under the heading, kept.\n- [[0004-data-model|DEC-0004]] — Tables · 2026-03-01" in out)
+    accepted = out.split("## Accepted", 1)[1].split("\n## ", 1)[0]
+    check("an alias-less wikilink line is that record's line, not a note, and gets no second line",
+          accepted.count("\n- [[0003-") == 1 and "an alias-less line" in accepted)
+    check("a note after the entries stays after them", accepted.rstrip().endswith("A closing note."))
     os.remove(os.path.join(adr, "0004-data-model.md"))
     os.remove(os.path.join(adr, "_decisions-moc.md"))
 
