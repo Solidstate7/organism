@@ -4,6 +4,38 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-19
+
+### Added
+
+- `organism handoff-state`: the facts a brief may state (root, branch, HEAD, upstream,
+  ahead and behind, pushed or not, dirty files, the last commits, every hash the brief
+  names with whether it exists and is pushed, the sessions since the brief), and
+  `--check`, which names a hash the new brief invents or calls pushed while the upstream
+  lacks it and lists the open threads the old brief dropped. `/handoff` reads the state
+  before writing the brief and runs the check after.
+- `organism adr-index next|moc|trim`: the records folder and the next number, the
+  decisions MOC regenerated from every record (an existing page keeps its header, its
+  sections and the lines it already has), and the twenty-entry trim of the `CLAUDE.md`
+  index.
+- Session notes say what each tool call touched: the paths it read or wrote, the hosts it
+  reached, the browser's own description of its action marked "as described by the
+  session", the connector's name, and `outbound: remote` or `git: local`. A call that
+  touched a path under a folder holding `.organism-no-notes` shows `[excluded]` and no
+  output, so one project's opt-out holds inside another's notes.
+
+### Changed
+
+- One brief per repo or vault: `/handoff` works from the git top level, else the vault
+  root (the configured vault, or the nearest folder above holding `.obsidian` or
+  `docs/adr`), and outside both it writes nothing and says so. A vault that is the home
+  folder counts as none.
+- `/handoff` says in one line when a session wrote and decided nothing, and still writes
+  the brief. The skill is 20 KB instead of 35; the retro reconstruction lives in its own
+  file, read only when it is used.
+- The README's hook table says the brief loader reads the nearest `HANDOFF.md`; its
+  "writes only" line names the MOC page and the retro marker.
+
 ## [0.1.2] - 2026-10-16
 
 ### Changed
