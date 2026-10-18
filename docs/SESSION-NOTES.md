@@ -46,7 +46,9 @@ Four rules keep a long session readable:
 - **Each tool call is one collapsed callout.** The title is the tool's icon, its name, and
   a one-line label: the command's description, the file path, or the search pattern. The
   body opens with what the call touched, when there is something to say. The paths it
-  read or wrote come first; a path under a folder that opted out shows as `[excluded]`.
+  read or wrote come first: the absolute or `~` paths the call names (a relative path
+  inside a command is not read). A call that touched a path under a folder that opted out
+  shows `[excluded]` as its title detail and its paths line, and its output is withheld.
   Then the hosts it reached: a browser call inherits the host its tab last opened, and a
   query string is never copied. A browser action carries the browser's own one-line
   description, marked "as described by the session" because nothing checks it. A

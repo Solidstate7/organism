@@ -155,8 +155,8 @@ on anything outbound (a push, a deploy, a web fetch, a connector call that sends
 
 Common secrets (API keys, tokens, private keys, passwords in URLs) are redacted before
 anything is written. This is best effort, not a guarantee. A project can opt out with an
-empty `.organism-no-notes` file, and a path under such a folder shows as `[excluded]` in
-any other session's notes. `/incognito on` keeps a stretch of work out of the
+empty `.organism-no-notes` file, and a call that touches a path under such a folder shows
+`[excluded]` with no output in any other session's notes. `/incognito on` keeps a stretch of work out of the
 notes, and `/incognito purge` deletes what the current session has saved so far and
 stops saving until `/incognito off`.
 [docs/SESSION-NOTES.md](docs/SESSION-NOTES.md) shows the format and lists exactly what is

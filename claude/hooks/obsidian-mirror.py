@@ -356,10 +356,29 @@ def local_ts(iso):
 # guard applies to connector tools (guard-publish.js, toolCall); test_paths_and_hosts.py
 # asserts the two copies stay equal.
 OUTBOUND_TOOL_RE = re.compile(r"deploy|publish|push|release|gist|upload|create|update|post|send|comment|issue|message|commit|merge|share", re.I)
-# The guard scans broadly on purpose (a block is cheap, a leak is not); the note marks fewer:
-# a connector tool whose own name says it only reads is not outbound even when the guard
-# would scan it (get_message, list_deployments, get-comments).
-READ_TOOL_RE = re.compile(r"(?:^|[_-])(?:get|list|search|read|fetch|query|download|describe|count|aggregate|suggest|check|show|view|inspect|export)(?:$|[_-])", re.I)
+# The guard scans broadly on purpose (a block is cheap, a leak is not); the note marks by
+# the first verb in a connector tool's name: get_message and list_deployments read,
+# notion-create-view and reply write. A name with no verb falls back to the guard's list.
+READ_VERBS = {"get", "list", "search", "read", "fetch", "query", "download", "describe", "count",
+              "aggregate", "suggest", "check", "show", "view", "inspect", "export", "lookup", "find"}
+WRITE_VERBS = {"deploy", "publish", "push", "release", "gist", "upload", "create", "update", "post", "send",
+               "comment", "commit", "merge", "share", "reply", "forward", "respond", "trash", "untrash",
+               "delete", "move", "set", "patch", "put", "write", "apply", "label", "unlabel", "mark", "unmark",
+               "cancel", "archive", "restore", "accept", "approve", "complete", "activate", "revoke", "assign",
+               "invalidate", "stage", "promote", "rollback", "pause", "unpause", "kill", "stop", "start", "run",
+               "spawn", "duplicate", "convert", "add", "remove", "edit", "rename", "transfer", "buy", "verify",
+               "authorize", "record", "rerequest", "retry", "extend", "insert", "append", "submit", "invite"}
+
+
+def connector_writes(toolpart):
+    """True when a connector tool's name says it writes or sends: the first token that is a
+    read or a write verb decides; a name with neither falls back to the guard's list."""
+    for tok in re.split(r"[_\-\s]+", toolpart.lower()):
+        if tok in READ_VERBS:
+            return False
+        if tok in WRITE_VERBS:
+            return True
+    return bool(OUTBOUND_TOOL_RE.search(toolpart))
 PUBLISH_CMD_RE = re.compile(
     r"\bgit(?:\s+-[cC]\s*\S+|\s+--git-dir=\S+)*\s+push\b"
     r"|\bgh\s+(?:pr\s+(?:create|merge|comment|review|edit|close|reopen|ready)"
@@ -440,22 +459,26 @@ def trace_lines(name, inp):
         return [], False
     lines = []
     paths = [str(inp[k]).strip() for k in PATH_KEYS if isinstance(inp.get(k), str) and inp[k].strip()]
+    # a Glob pattern or Grep's glob that starts at / or ~ names a place too
+    for k in (("pattern",) if name == "Glob" else ()) + ("glob",):
+        v = inp.get(k)
+        if isinstance(v, str) and v.strip().startswith(("/", "~")):
+            paths.append(v.strip())
     cmd = inp.get("command") if name == "Bash" and isinstance(inp.get("command"), str) else None
     if cmd:
         paths += CMD_PATH_RE.findall(URL_QUERY_RE.sub(r"\1", cmd))
-    shown, excluded = [], False
-    for p in paths:
+    labels, excluded = [], False
+    for p in paths:      # every path is checked; only the display is capped
         if _excluded(p):
             excluded = True
             label = "[excluded]"
         else:
             label = "`%s`" % p
-        if label not in shown:
-            shown.append(label)
-        if len(shown) >= MAX_TRACE_PATHS:
-            break
+        if label not in labels:
+            labels.append(label)
+    shown = labels[:MAX_TRACE_PATHS]
     if shown:
-        lines.append("paths: " + ", ".join(shown))
+        lines.append("paths: " + ", ".join(shown) + (" …" if len(labels) > MAX_TRACE_PATHS else ""))
     is_chrome = name.startswith("mcp__claude-in-chrome__")
     hosts, navigated = [], False
     for t, url in _tab_navigations(name, inp):
@@ -482,7 +505,7 @@ def trace_lines(name, inp):
         lines.append("as described by the session: " + "; ".join('"%s"' % s for s in sums[:MAX_TRACE_SUMMARIES])
                      + (" …" if len(sums) > MAX_TRACE_SUMMARIES else ""))
     outbound = (name in ("WebFetch", "WebSearch") or (is_chrome and (name.endswith("navigate") or navigated))
-                or (bool(server) and bool(OUTBOUND_TOOL_RE.search(toolpart)) and not READ_TOOL_RE.search(toolpart))
+                or (bool(server) and connector_writes(toolpart))
                 or (bool(cmd) and bool(PUBLISH_CMD_RE.search(cmd))))
     if outbound:
         lines.append("outbound: remote")

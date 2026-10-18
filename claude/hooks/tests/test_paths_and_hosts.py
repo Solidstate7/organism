@@ -83,6 +83,13 @@ def transcript(path, cwd, excluded_file):
         ("t20", "Bash", {"command": "git branch -a", "description": "List branches"}, "main"),
         ("t21", "Bash", {"command": "rsync -a ./build/ ./backup/", "description": "Copy locally"}, "ok"),
         ("t22", "Bash", {"command": "npx wrangler deploy", "description": "Deploy the worker"}, "ok"),
+        ("t23", "Bash", {"command": "cp /etc/a /etc/b /etc/c /etc/d /etc/e %s /var/tmp/" % excluded_file,
+                         "description": "Copy many files"}, "copied the private thing"),
+        ("t24", "Glob", {"pattern": os.path.dirname(excluded_file) + "/**/*.md"}, excluded_file),
+        ("t25", "mcp__claude_ai_Notion__notion-create-view", {"name": "v"}, "created"),
+        ("t26", "mcp__claude_ai_Gmail__reply", {"id": "m1", "body": "ok"}, "sent"),
+        ("t27", "mcp__claude_ai_Vercel__create_observability_query", {"q": "x"}, "created"),
+        ("t28", "Bash", {"command": "cp a.txt b.txt", "description": "Copy a relative file"}, "ok"),
     ]
     lines = [entry(1, "user", "Do the things.", cwd)]
     blocks = [{"type": "text", "text": "Starting."}]
@@ -145,11 +152,15 @@ try:
     print("paths and the opt-out")
     check("an edit names its path", "- paths: `%s/src/app.py`" % cwd in by_title(cs, "Edit")[0])
     ex = by_title(cs, "[excluded]")
-    check("the excluded call's title is the tool and [excluded], its paths line [excluded], its output withheld",
-          len(ex) == 1 and ex[0].startswith("> [!note]- 📖 Read · [excluded]") and "- paths: [excluded]" in ex[0]
-          and "output withheld" in ex[0])
+    check("the excluded read's title is the tool and [excluded], its paths line [excluded], its output withheld",
+          any(c.startswith("> [!note]- 📖 Read · [excluded]") and "- paths: [excluded]" in c and "output withheld" in c for c in ex))
+    check("a command naming the excluded path sixth among seven is excluded too (every path is checked)",
+          any(c.startswith("> [!note]- 🖥️ Bash · [excluded]") for c in ex) and "copied the private thing" not in doc)
+    check("a Glob pattern under the opted-out folder is excluded", any("Glob · [excluded]" in c for c in ex))
+    check("three excluded calls in all", len(ex) == 3)
     check("neither the folder, the file name nor its text reaches the note",
           "private-proj" not in doc and "notes.md" not in doc and "private text" not in doc)
+    check("a relative path in a command is not read as a path", "paths:" not in by_title(cs, "Copy a relative file")[0])
     c3 = by_title(cs, "List files")[0]
     check("a plain ls adds no line", "- " not in c3.split("\n>\n", 1)[1].split("```")[0])
 
@@ -178,6 +189,9 @@ try:
     for part in ("notion-fetch", "get_message", "list_deployments"):
         c = by_title(cs, part)[0]
         check("a connector read (%s) names the connector and is not outbound" % part, "- connector: " in c and "outbound" not in c)
+    for part in ("notion-create-view", "Gmail__reply", "create_observability_query"):
+        c = by_title(cs, part)[0]
+        check("a connector write (%s) is outbound by its first verb" % part, "- outbound: remote" in c)
 
     print("commands")
     check("a push is outbound", "- outbound: remote" in by_title(cs, "Push main")[0])
@@ -190,7 +204,7 @@ try:
     for part in ("List open PRs", "Look at the vercel folder", "List branches", "Copy locally"):
         c = by_title(cs, part)[0]
         check("%s: no outbound and no local mark" % part, "outbound" not in c and "git: local" not in c)
-    check("eight outbound marks in all", doc.count("- outbound: remote") == 8)
+    check("eleven outbound marks in all", doc.count("- outbound: remote") == 11)
 
     print("the publish-class name test equals the guard's")
     m1 = re.search(r'OUTBOUND_TOOL_RE = re\.compile\(r"([^"]+)", re\.I\)', read(MIRROR))
