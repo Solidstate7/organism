@@ -332,6 +332,8 @@ def tool_title(name, inp):
                 val = str(inp[key])
                 if key == "url":
                     val = re.split(r"[?#]", val, 1)[0]   # the query string stays out of the notes
+                else:
+                    val = URL_QUERY_RE.sub(r"\1", val)   # a URL inside a command loses its query too
                 # redacted before cell() cuts it, so the cut can't keep part of a secret
                 return f"{name} · {cell(mirror.redact_head(val, 4096)[0], 70)}"
     return name
@@ -354,15 +356,42 @@ def local_ts(iso):
 # guard applies to connector tools (guard-publish.js, toolCall); test_paths_and_hosts.py
 # asserts the two copies stay equal.
 OUTBOUND_TOOL_RE = re.compile(r"deploy|publish|push|release|gist|upload|create|update|post|send|comment|issue|message|commit|merge|share", re.I)
-PUBLISH_CMD_RE = re.compile(r"\bgit\s+push\b|\bgh\s+(?:pr|release|repo|gist|issue|api)\b|\bnpm\s+publish\b"
-                            r"|\bcargo\s+publish\b|\btwine\s+upload\b|\bdocker\s+push\b|\bvercel\b"
-                            r"|\bnetlify\s+deploy\b|\bscp\s|\brsync\s", re.I)
-LOCAL_CMD_RE = re.compile(r"\bgit\s+(?:commit|merge|rebase|branch|checkout|switch|tag|stash)\b")
+# The guard scans broadly on purpose (a block is cheap, a leak is not); the note marks fewer:
+# a connector tool whose own name says it only reads is not outbound even when the guard
+# would scan it (get_message, list_deployments, get-comments).
+READ_TOOL_RE = re.compile(r"(?:^|[_-])(?:get|list|search|read|fetch|query|download|describe|count|aggregate|suggest|check|show|view|inspect|export)(?:$|[_-])", re.I)
+PUBLISH_CMD_RE = re.compile(
+    r"\bgit(?:\s+-[cC]\s*\S+|\s+--git-dir=\S+)*\s+push\b"
+    r"|\bgh\s+(?:pr\s+(?:create|merge|comment|review|edit|close|reopen|ready)"
+    r"|release\s+(?:create|upload|edit|delete)|repo\s+(?:create|edit|delete|fork|sync|archive)"
+    r"|gist\s+(?:create|edit|delete)|issue\s+(?:create|comment|edit|close|reopen|transfer|delete)"
+    r"|api\s+(?:[^\n]*\s)?(?:-X\s*|--method[\s=])(?:POST|PUT|PATCH|DELETE)\b|api\s+[^\n]*\s(?:-f|-F|--input|--raw-field|--field)\b)"
+    r"|\bnpm\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b|\bdocker\s+push\b"
+    r"|(?:^|[;&|(]\s*|\bnpx\s+|\bpnpm\s+(?:dlx\s+)?|\byarn\s+(?:dlx\s+)?)(?:vercel(?:\s+deploy|\s+--prod|\s*$)|netlify\s+deploy|wrangler\s+(?:deploy|publish|pages\s+deploy)"
+    r"|firebase\s+deploy|fly(?:ctl)?\s+deploy|surge\b|gcloud\s+(?:app\s+deploy|run\s+deploy|storage\s+cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync|mv)|rclone\s+(?:copy|sync|move))"
+    r"|\bscp\s+[^\n]*\s\S+:\S*|\brsync\s+[^\n]*\s(?:\S+@)?\S+:\S*|\brsync\s+[^\n]*rsync://"
+    r"|\bcurl\b[^\n]*(?:\s-X\s*(?:POST|PUT|PATCH|DELETE)\b|\s--?(?:d|data|data-raw|data-binary|data-urlencode|F|form|T|upload-file|json)\b)"
+    r"|\bwget\b[^\n]*\s--(?:post-data|post-file|method=(?:POST|PUT|PATCH|DELETE))\b", re.I | re.M)
+LOCAL_CMD_RE = re.compile(r"\bgit(?:\s+-[cC]\s*\S+)*\s+(?:commit|merge|rebase|switch|checkout|tag|stash|cherry-pick|revert|reset|am)\b")
 PATH_KEYS = ("file_path", "path", "notebook_path", "filePath")
-CMD_PATH_RE = re.compile(r"(?<![\w.-])(?:~|/)[\w./@-]+")
+CMD_PATH_RE = re.compile(r"(?<![\w.:/-])(?:~|/)(?!/)[\w./@-]+")
+URL_QUERY_RE = re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s?#'\"<>]+)[?#][^\s'\"<>]*", re.I)
 MAX_TRACE_PATHS = 5
 MAX_TRACE_SUMMARIES = 3
-_TAB_URL = {}   # tabId -> the URL last opened in that browser tab, for the session being rendered
+_TAB_URL = {}      # tabId -> the URL last opened in that browser tab, for the session being rendered
+_EXCLUDED = {}     # path -> whether it lies under a folder that opted out, for the session being rendered
+
+
+def _excluded(path):
+    """mirror.notes_excluded(path), remembered per rendered session: a long session asks
+    about the same few folders thousands of times, and each answer reads paths.env."""
+    p = os.path.expanduser(path)
+    if p not in _EXCLUDED:
+        try:
+            _EXCLUDED[p] = bool(mirror.notes_excluded(p))
+        except Exception:
+            _EXCLUDED[p] = False
+    return _EXCLUDED[p]
 
 
 def _host(url):
@@ -384,23 +413,43 @@ def _collect(inp, key, out):
     return out
 
 
+def _tab_navigations(name, inp):
+    """[(tabId, url)] the call opens: a navigate's own url, and every navigate nested in a
+    browser_batch's actions, in order."""
+    out = []
+    url = inp.get("url")
+    if isinstance(url, str) and _host(url):
+        for t in _collect({k: v for k, v in inp.items() if k != "actions"}, "tabId", []) or [""]:
+            out.append((t, url))
+    for a in inp.get("actions") or []:
+        sub = a.get("input") if isinstance(a, dict) else None
+        if isinstance(sub, dict) and isinstance(sub.get("url"), str) and _host(sub["url"]):
+            out.append((str(sub.get("tabId", "")).strip(), sub["url"]))
+    return out
+
+
 def trace_lines(name, inp):
-    """What the call touched: the paths it read or wrote (one under a folder that opted
-    out of the notes shows as [excluded]), the hosts it reached (a browser call inherits
-    the host its tab last opened), the browser's own description of its action, the
-    connector's name, and an outbound mark (remote: a push, deploy, web fetch, a page
-    opened in the browser, a connector call that sends or publishes; local: a commit).
-    Empty for a plain read or a local command, so most callouts stay as they were."""
+    """(lines, excluded): what the call touched, and whether any path it touched lies under
+    a folder that opted out of the notes. The lines: the paths it read or wrote (an opted-out
+    one shows as [excluded]), the hosts it reached (a browser call inherits the host its tab
+    last opened; a batch that navigates moves the tab first), the browser's own description
+    of its action, the connector's name, and an outbound mark (remote: a push, a deploy, a web
+    fetch, a page opened in the browser, a connector call that writes or sends; local: a
+    commit). Empty for a plain read or a local command, so most callouts stay as they were."""
     if not isinstance(inp, dict):
-        return []
+        return [], False
     lines = []
     paths = [str(inp[k]).strip() for k in PATH_KEYS if isinstance(inp.get(k), str) and inp[k].strip()]
     cmd = inp.get("command") if name == "Bash" and isinstance(inp.get("command"), str) else None
     if cmd:
-        paths += CMD_PATH_RE.findall(cmd)
-    shown = []
+        paths += CMD_PATH_RE.findall(URL_QUERY_RE.sub(r"\1", cmd))
+    shown, excluded = [], False
     for p in paths:
-        label = "[excluded]" if mirror.notes_excluded(os.path.expanduser(p)) else "`%s`" % p
+        if _excluded(p):
+            excluded = True
+            label = "[excluded]"
+        else:
+            label = "`%s`" % p
         if label not in shown:
             shown.append(label)
         if len(shown) >= MAX_TRACE_PATHS:
@@ -408,49 +457,57 @@ def trace_lines(name, inp):
     if shown:
         lines.append("paths: " + ", ".join(shown))
     is_chrome = name.startswith("mcp__claude-in-chrome__")
-    hosts = []
-    url = inp.get("url")
-    if isinstance(url, str) and _host(url):
-        hosts.append(_host(url))
-        if is_chrome:
-            for t in _collect(inp, "tabId", []):
-                _TAB_URL[t] = url
-    elif is_chrome:
+    hosts, navigated = [], False
+    for t, url in _tab_navigations(name, inp):
+        h = _host(url)
+        if h and h not in hosts:
+            hosts.append(h)
+        if is_chrome and t:
+            _TAB_URL[t] = url
+            navigated = True
+    if is_chrome and not hosts:
         for t in _collect(inp, "tabId", []):
             h = _host(_TAB_URL.get(t))
             if h and h not in hosts:
                 hosts.append(h)
     if hosts:
         lines.append("hosts: " + ", ".join(hosts))
-    server = name.split("__")[1] if name.startswith("mcp__") and not is_chrome and name.count("__") >= 2 else ""
+    server, toolpart = "", name
+    if name.startswith("mcp__") and not is_chrome and name.count("__") >= 2:
+        _, server, toolpart = name.split("__", 2)
     if server:
         lines.append("connector: " + server)
     sums = _collect(inp, "action_summary", [])
     if sums:
         lines.append("as described by the session: " + "; ".join('"%s"' % s for s in sums[:MAX_TRACE_SUMMARIES])
                      + (" …" if len(sums) > MAX_TRACE_SUMMARIES else ""))
-    outbound = (name in ("WebFetch", "WebSearch") or (is_chrome and name.endswith("navigate"))
-                or (bool(server) and bool(OUTBOUND_TOOL_RE.search(name)))
+    outbound = (name in ("WebFetch", "WebSearch") or (is_chrome and (name.endswith("navigate") or navigated))
+                or (bool(server) and bool(OUTBOUND_TOOL_RE.search(toolpart)) and not READ_TOOL_RE.search(toolpart))
                 or (bool(cmd) and bool(PUBLISH_CMD_RE.search(cmd))))
     if outbound:
         lines.append("outbound: remote")
     elif cmd and LOCAL_CMD_RE.search(cmd):
         lines.append("git: local")
-    return [redact(ln) for ln in lines]
+    return [redact(ln) for ln in lines], excluded
 
 
 def render_tool(name, inp, out, is_error):
     """One collapsed callout: what the call touched (trace_lines, when there is something
-    to say), then the output only (the rest of the input is dropped). The output is
+    to say), then the output only (the rest of the input is dropped). A call that touched
+    a path under a folder that opted out of the notes shows neither its title detail nor
+    its output: the opt-out of one project holds inside another's notes. The output is
     redacted before it is clipped, so the clip can't leave part of a secret behind."""
     icon = TOOL_ICON.get(name, "🔧")
     ctype = "failure" if is_error else "note"
+    trace, excluded = trace_lines(name, inp)
+    if excluded:
+        return blockquote(f"[!{ctype}]- {icon} {name} · [excluded]\n\n- paths: [excluded]\n\n"
+                          f"_(output withheld: a path under a folder that opted out of the notes)_")
     if (out or "").strip():
         text, cut = mirror.redact_head(out, REDACT_SCAN)
         body = fence(clip(text, MAX_TOOL_OUTPUT, MAX_TOOL_OUTPUT_LINES, cut))
     else:
         body = "_(no output)_"
-    trace = trace_lines(name, inp)
     head = ("\n".join("- " + ln for ln in trace) + "\n\n") if trace else ""
     return blockquote(f"[!{ctype}]- {icon} {tool_title(name, inp)}\n\n{head}{body}")
 
@@ -798,6 +855,7 @@ def render_session_file(entries, short, project, incog_rec=None, machine=None,
     skill_map = build_skill_map(entries)
     is_incog = _incognito_checker(incog_rec)
     _TAB_URL.clear()   # a browser tab's last URL is remembered within one session only
+    _EXCLUDED.clear()  # and so is the opt-out answer per path
     out = [mirror.session_h1(short, project), ""]
     if machine:
         out += [mirror.machine_line(machine), ""]
