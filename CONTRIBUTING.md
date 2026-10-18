@@ -75,3 +75,7 @@ Organism's hooks run inside your own Claude Code sessions. While you work on it:
 Fill in the pull request template, keep each pull request to one change, and make sure
 `run-all.sh` passes. By contributing you agree that your contribution is licensed under
 the repository's license.
+
+## Push to deploy
+
+A push to `main` is a release. `.claude-plugin/marketplace.json` serves the plugin from `./`, so every user who installed Organism through its marketplace gets `main` at their next plugin update, with no staging or tag in between; CI runs the suite on macOS and Linux only after the push. Run the suite before a push, and keep the README true to the code. A plugin must not carry a `CLAUDE.md` at its root (Claude Code would load it into every user's session), which is why this note lives here.
