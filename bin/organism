@@ -32,6 +32,7 @@ case "${1:-help}" in
   setup)      shift; exec python3 "$HOOKS/organism-setup.py" "$@" ;;
   incognito)  shift; exec python3 "$HOOKS/incognito.py" "$@" ;;
   adr-link)   shift; exec bash "$HOOKS/adr-link.sh" "$@" ;;
+  handoff-state) shift; exec python3 "$HOOKS/handoff-state.py" "$@" ;;
   guard-scan) shift; exec sh "$HOOKS/guard-publish.sh" --scan "$@" ;;
   guard-status) exec sh "$HOOKS/guard-publish.sh" --status ;;
   ack)        shift; exec python3 "$HOOKS/reconcile.py" --ack "$@" ;;
@@ -88,7 +89,8 @@ case "${1:-help}" in
                 "  ${G}organism test${X}        run the test suite" \
                 "  ${G}organism link${X}        use Organism on another computer" "" \
                 "Used by the skills: ${G}incognito${X} [on|off|toggle|purge|status], ${G}adr-link${X} <cmd>," \
-                "${G}guard-scan${X} <files>, ${G}guard-status${X}, ${G}ack${X} (acknowledge the doc check's open alarms)" "" \
+                "${G}handoff-state${X} [--check] (the facts a brief may state), ${G}guard-scan${X} <files>," \
+                "${G}guard-status${X}, ${G}ack${X} (acknowledge the doc check's open alarms)" "" \
                 "Config lives in one gitignored file (${C}~/.claude/state/paths.env${X}); every key is" \
                 "optional. Docs: README.md · docs/ADVANCED.md"
               exit "${rc:-0}" ;;

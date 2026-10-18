@@ -98,7 +98,9 @@ brief as you left it, plus links to the saved notes of the sessions that came af
 
 ### What it won't do
 
-- It writes only the records, the index, the brief and `.gitignore`. It never edits code.
+- It writes only the records, the index, the brief and `.gitignore`; in a vault also a page
+  listing every record, and after a rebuild of old history a marker file in the records
+  folder. It never edits code.
 - It commits on the current branch and never pushes unless your note asks it to. Outside
   a git repository it skips the git steps.
 - It records only this project's decisions. A decision about another project is named in
@@ -173,7 +175,7 @@ These hooks run without any input from you:
 | Hook | When | What it does |
 |---|---|---|
 | Session notes | After every reply | Adds the exchange to the session's note in the vault. |
-| Brief loading | Session start | Loads the repo's `HANDOFF.md`, then lists the sessions that ran after it was written, each linked to its note. |
+| Brief loading | Session start | Loads the nearest `HANDOFF.md` above the folder the session started in, then lists the sessions that ran after it was written, each linked to its note. |
 | Session close | Session end | Adds the final exchange to the note, and runs the doc check if you turned it on. |
 | Publish guard | Before `Bash`, connector, web fetch and web search calls | Blocks a push, deploy, upload or web request that contains a term from your blocked list. |
 
