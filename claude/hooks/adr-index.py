@@ -136,7 +136,8 @@ def parse_record(path):
     date = d.group(1) if d else ""
     line = ""
     m = re.search(r"^##\s+Decision(?: Outcome)?\s*$\n+(.+?)$", body, re.M | re.I)
-    if m:
+    if m and not re.match(r"^\s*(?:[-*+]|\d+[.)])\s", m.group(1)):
+        # a Decision section that opens with a list has no one-line ruling; the title is it
         line = m.group(1)
         line = re.sub(r"^Chosen option:\s*", "", line, flags=re.I)
         line = re.sub(r"[*_`]", "", line).strip().rstrip(".")

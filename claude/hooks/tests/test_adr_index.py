@@ -89,6 +89,12 @@ try:
           "notes stay plain Markdown, curated wording" in moc and "[[0003-sync-by-obsidian-sync|DEC-0003]] — Obsidian Sync" in moc)
     check("the moc itself is not listed as a record", "_decisions-moc" not in moc.split("## Accepted", 1)[1])
 
+    print("moc: a Decision section that opens with a list yields the title")
+    write(os.path.join(adr, "0004-list-decision.md"), VAULT_REC % ("accepted", "2026-03-01", "0004", "Keep the title as the ruling", "- first bullet of a list\n- second"))
+    rc, out, err = tool("moc", "--root", P)
+    check("the line is the title, not the first bullet", "- [[0004-list-decision|DEC-0004]] — Keep the title as the ruling · 2026-03-01" in out and "first bullet" not in out)
+    os.remove(os.path.join(adr, "0004-list-decision.md"))
+
     print("moc keeps a listed record in its section; a new status gets its own")
     write(os.path.join(adr, "0004-moved-elsewhere.md"), VAULT_REC % ("moved", "2026-03-01", "0004", "Moved elsewhere", "Lives in the other repo now."))
     write(os.path.join(adr, "0005-also-moved.md"), VAULT_REC % ("moved", "2026-03-02", "0005", "Also moved", "Same."))
