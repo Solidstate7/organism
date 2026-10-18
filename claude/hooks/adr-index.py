@@ -45,24 +45,10 @@ def read(path):
         return None
 
 
-def vault_of(root):
-    try:
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
-        import pathsenv
-        v = pathsenv.read_raw().get("CLAUDE_VAULT_ROOT", "")
-        v = os.path.realpath(os.path.expandvars(os.path.expanduser(v))) if v else ""
-        if v and (root == v or root.startswith(v + os.sep)):
-            return v
-    except Exception:
-        pass
-    d = root
-    while True:
-        if os.path.isdir(os.path.join(d, ".obsidian")):
-            return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            return ""
-        d = parent
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
+import rootof  # noqa: E402
+
+vault_of = rootof.obsidian_vault_of   # the Obsidian vault holding a folder, '' outside one
 
 
 def resolve_adr_dir(root):
@@ -136,8 +122,9 @@ def parse_record(path):
     date = d.group(1) if d else ""
     line = ""
     m = re.search(r"^##\s+Decision(?: Outcome)?\s*$\n+(.+?)$", body, re.M | re.I)
-    if m and not re.match(r"^\s*(?:[-*+]|\d+[.)])\s", m.group(1)):
-        # a Decision section that opens with a list has no one-line ruling; the title is it
+    if m and not re.match(r"^\s*(?:[-*+]\s|\d+[.)]\s|#|>)", m.group(1)):
+        # a Decision section that opens with a list, a heading or a callout has no one-line
+        # ruling, and an empty one has none either: the title is it
         line = m.group(1)
         line = re.sub(r"^Chosen option:\s*", "", line, flags=re.I)
         line = re.sub(r"[*_`]", "", line).strip().rstrip(".")
@@ -152,7 +139,7 @@ def cmd_next(root):
     d = resolve_adr_dir(root)
     recs = records(d)
     vault = vault_of(root)
-    out = ["adr_dir=" + d, "exists=" + ("yes" if os.path.isdir(d) else "no"),
+    out = ["root=" + root, "adr_dir=" + d, "exists=" + ("yes" if os.path.isdir(d) else "no"),
            "count=" + str(len(recs)), "vault=" + ("yes" if vault else "no")]
     if recs:
         n, base, path = recs[-1]
@@ -167,31 +154,45 @@ def cmd_next(root):
     return 0
 
 
+CANON = {"accepted": "Accepted", "superseded": "Superseded", "proposed": "Proposed"}
+
+
+def section_key(text):
+    """A status tag and a heading meet on one key: `adr/data-model` and "Data Model" are
+    both `data model`."""
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
 def existing_moc(path):
-    """(header text up to the first section, {number: (line, section)}) of the current MOC,
-    or ('', {}). A record already listed keeps its line and its section."""
+    """What the current MOC already holds, or empty: the header (up to the first section),
+    {number: (line, section key)} for every record listed, the sections in their order as
+    [(key, heading text)], and the lines inside each section that are not record entries
+    (a note under a heading), {key: [lines]}. All of it survives a regeneration."""
     text = read(path)
     if not text:
-        return "", {}
+        return "", {}, [], {}
     header_end = re.search(r"^## ", text, re.M)
     header = text[:header_end.start()] if header_end else ""
-    kept, section = {}, ""
+    kept, order, extras, key = {}, [], {}, ""
     for ln in text.splitlines():
         h = re.match(r"^##\s+(.+?)\s*$", ln)
         if h:
-            section = h.group(1).strip().lower()
+            key = section_key(h.group(1))
+            order.append((key, h.group(1).strip()))
             continue
         m = MOC_LINE.match(ln)
         if m:
-            kept[int(m.group(2))] = (ln, section)
-    return header, kept
+            kept[int(m.group(2))] = (ln, key)
+        elif key and ln.strip():
+            extras.setdefault(key, []).append(ln)
+    return header, kept, order, extras
 
 
 def cmd_moc(root, write, project):
     d = resolve_adr_dir(root)
     recs = records(d)
     moc_path = os.path.join(d, "_decisions-moc.md")
-    header, kept = existing_moc(moc_path)
+    header, kept, old_order, extras = existing_moc(moc_path)
     rel = os.path.relpath(d, root)
     if not header.strip():
         name = project or os.path.basename(root.rstrip(os.sep))
@@ -203,7 +204,7 @@ def cmd_moc(root, write, project):
     for n, base, path in reversed(recs):
         r = parse_record(path)
         dec = "DEC-" + str(n).zfill(len(str(n)) if len(str(n)) > 4 else 4)
-        key = r["status"]
+        key = section_key(r["status"])
         old_line, old_section = kept.get(n, ("", ""))
         if old_line and (r["status"] != "superseded" or "superseded by" in old_line):
             line = old_line
@@ -222,12 +223,18 @@ def cmd_moc(root, write, project):
             elif r["date"]:
                 line += " · " + r["date"]
         sections.setdefault(key, []).append(line)
-    order = ["accepted", "superseded", "proposed"] + sorted(k for k in sections if k not in ("accepted", "superseded", "proposed"))
+    headings = {k: text for k, text in old_order}           # an existing heading keeps its spelling
+    order = [k for k, _ in old_order]                        # and its place
+    for k in ["accepted", "superseded", "proposed"] + sorted(sections):
+        if k not in order:
+            order.append(k)
     parts = [header.rstrip("\n") + "\n"]
     for key in order:
-        if key not in sections:
+        if key not in sections and key not in extras:
             continue
-        parts.append("\n## " + key.capitalize() + "\n\n" + "\n".join(sections[key]) + "\n")
+        heading = headings.get(key) or CANON.get(key) or key.capitalize()
+        body = sections.get(key, []) + extras.get(key, [])
+        parts.append("\n## " + heading + "\n\n" + "\n".join(body) + "\n")
     page = "".join(parts)
     if write:
         try:
@@ -284,7 +291,7 @@ def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
         return 0
-    cmd, root, write, project, keep, dry = argv[0], os.getcwd(), False, "", 20, False
+    cmd, root, write, project, keep, dry = argv[0], None, False, "", 20, False
     i = 1
     while i < len(argv):
         a = argv[i]
@@ -305,7 +312,8 @@ def main(argv):
             print("adr-index: unknown argument " + a, file=sys.stderr)
             return 2
         i += 1
-    root = os.path.realpath(root)
+    # no --root: the folder /handoff works from (the repo, else the vault), never a subfolder
+    root = os.path.realpath(root) if root else rootof.find_root(os.getcwd())[0]
     if cmd == "next":
         return cmd_next(root)
     if cmd == "moc":

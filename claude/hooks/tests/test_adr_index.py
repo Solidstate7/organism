@@ -95,6 +95,41 @@ try:
     check("the line is the title, not the first bullet", "- [[0004-list-decision|DEC-0004]] — Keep the title as the ruling · 2026-03-01" in out and "first bullet" not in out)
     os.remove(os.path.join(adr, "0004-list-decision.md"))
 
+    print("moc: a heading, a callout or nothing under Decision also yields the title")
+    write(os.path.join(adr, "0004-heading-first.md"), VAULT_REC % ("accepted", "2026-03-01", "0004", "Heading first", "### Sub\nbody"))
+    write(os.path.join(adr, "0005-callout-first.md"), VAULT_REC % ("accepted", "2026-03-02", "0005", "Callout first", "> [!note] a callout"))
+    write(os.path.join(adr, "0006-empty-decision.md"), VAULT_REC % ("accepted", "2026-03-03", "0006", "Empty decision", ""))
+    rc, out, err = tool("moc", "--root", P)
+    check("the lines are the titles", "DEC-0004]] — Heading first ·" in out and "DEC-0005]] — Callout first ·" in out and "DEC-0006]] — Empty decision ·" in out)
+    check("no marker and no next heading leaks into a line", "— ### " not in out and "— > " not in out and "— ## Consequences" not in out)
+    for n in ("0004-heading-first.md", "0005-callout-first.md", "0006-empty-decision.md"):
+        os.remove(os.path.join(adr, n))
+
+    print("moc keeps section spelling, order and the lines that are not entries")
+    write(os.path.join(adr, "0004-data-model.md"), VAULT_REC % ("data-model", "2026-03-01", "0004", "Tables not documents", "Tables."))
+    write(os.path.join(adr, "_decisions-moc.md"),
+          "---\ntags: [adr, moc]\n---\n# Decisions — My Project\n\n> [!info] c\n\n## Data Model\n\n"
+          "A note under the heading, kept.\n\n## Accepted\n\n- [[0001-keep-notes-plain|DEC-0001]] — curated · 2026-02-01\n")
+    rc, out, err = tool("moc", "--root", P)
+    check("the heading keeps its spelling and comes first as before", out.index("## Data Model") < out.index("## Accepted"))
+    check("the record with that status lands under it, and the note stays", "## Data Model\n\n- [[0004-data-model|DEC-0004]] — Tables · 2026-03-01\nA note under the heading, kept." in out)
+    os.remove(os.path.join(adr, "0004-data-model.md"))
+    os.remove(os.path.join(adr, "_decisions-moc.md"))
+
+    print("next without --root resolves the repo or the vault from a subfolder")
+    deep = os.path.join(P, "src", "deep")
+    os.makedirs(deep)
+    pr = subprocess.run([sys.executable, TOOL, "next"], cwd=deep, capture_output=True, text=True, env=ENV)
+    d = kv(pr.stdout)
+    check("a vault subfolder: the vault's docs/adr and its numbering", d.get("adr_dir") == adr and d.get("next") == "0004")
+    G2 = os.path.join(T, "repo2")
+    os.makedirs(os.path.join(G2, "a", "b"))
+    subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-C", G2, "init", "-q", "-b", "main"], env=ENV, check=True)
+    write(os.path.join(G2, "docs", "adr", "0002-x.md"), PLAIN_REC % ("0002", "X", "accepted", "2026-01-01", "x"))
+    pr = subprocess.run([sys.executable, TOOL, "next"], cwd=os.path.join(G2, "a", "b"), capture_output=True, text=True, env=ENV)
+    d = kv(pr.stdout)
+    check("a repo subfolder: the repo's docs/adr, next 0003", d.get("adr_dir") == os.path.join(os.path.realpath(G2), "docs", "adr") and d.get("next") == "0003")
+
     print("moc keeps a listed record in its section; a new status gets its own")
     write(os.path.join(adr, "0004-moved-elsewhere.md"), VAULT_REC % ("moved", "2026-03-01", "0004", "Moved elsewhere", "Lives in the other repo now."))
     write(os.path.join(adr, "0005-also-moved.md"), VAULT_REC % ("moved", "2026-03-02", "0005", "Also moved", "Same."))

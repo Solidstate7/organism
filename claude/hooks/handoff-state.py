@@ -30,11 +30,19 @@ try:
     import where
 except Exception:  # the lib is beside this file; a copy without it still prints git facts
     where = None
+import rootof
 
-HASH_RE = re.compile(r"(?<![0-9A-Za-z/_.-])([0-9a-f]{7,40})(?![0-9A-Za-z])")
-PUSHED_WORDS = re.compile(r"\b(pushed|in sync|on origin|upstream|published)\b", re.I)
-NOT_PUSHED = re.compile(r"\b(not pushed|unpushed|no push|never pushed|local only|not yet pushed"
-                        r"|ahead of|pushed nothing|without pushing)\b", re.I)
+# A hash-shaped token: 7 to 40 hex characters with at least one digit (a word such as
+# "defaced" is not one), not part of a longer word, a path or a UUID (a hyphen on either
+# side rules it out). An all-digit token counts only when git knows it as a commit.
+HASH_RE = re.compile(r"(?<![0-9A-Za-z/_.-])(?=[0-9a-f]*[0-9])([0-9a-f]{7,40})(?![0-9A-Za-z-])")
+# A token the repository doesn't know is reported only on a line that talks about commits.
+COMMIT_CONTEXT = re.compile(r"\b(?:commits?|HEAD|hash(?:es)?|pushed|unpushed|push|merged?|branch(?:es)?"
+                            r"|origin|upstream|rebased?|tagged?|revert(?:ed)?|cherry-pick|ahead|behind)\b", re.I)
+PUSHED_WORDS = re.compile(r"\b(?:pushed|in sync|on origin|published)\b", re.I)
+NOT_PUSHED = re.compile(r"\b(?:not pushed|unpushed|no push|never pushed|local only|not yet pushed|pushed nothing"
+                        r"|without pushing|ahead(?: of [^,;.\n]*?)? (?:by )?[1-9]\d*"
+                        r"|(?:one|two|three|four|five|six|seven|eight|nine|ten|[1-9]\d*) commits? ahead)\b", re.I)
 THREAD_HEAD = re.compile(r"^(#{1,6})\s*(.*\b(next|open|backlog|todo|threads)\b.*)$", re.I)
 BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
 MAX_HASHES = 40
@@ -55,43 +63,13 @@ def git(root, *args):
     return run(["git", "-c", "core.hooksPath=" + os.devnull, "-C", root] + list(args), cwd=root)
 
 
-def find_root(start):
-    """(root, kind): the git top level ('git'); else the vault root ('vault'); else the
-    start folder itself ('none'), where /handoff writes no brief. One brief per repo or
-    vault, so a run from a vault subfolder never leaves a brief that hides the vault's."""
-    start = os.path.realpath(start)
-    top = git(start, "rev-parse", "--show-toplevel")
-    if top:
-        return os.path.realpath(top), "git"
-    vault = vault_of(start)
-    if vault:
-        return vault, "vault"
-    return start, "none"
-
-
-def vault_of(root):
-    """The vault holding root: CLAUDE_VAULT_ROOT when root is under it, else the nearest
-    ancestor (root included) holding an .obsidian folder or a docs/adr folder."""
-    try:
-        import pathsenv
-        v = pathsenv.read_raw().get("CLAUDE_VAULT_ROOT", "")
-        v = os.path.realpath(os.path.expandvars(os.path.expanduser(v))) if v else ""
-        if v and (root == v or root.startswith(v + os.sep)):
-            return v
-    except Exception:
-        pass
-    d = root
-    while True:
-        if os.path.isdir(os.path.join(d, ".obsidian")) or os.path.isdir(os.path.join(d, "docs", "adr")):
-            return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            return ""
-        d = parent
+find_root = rootof.find_root            # (root, kind): git top level, vault root, or none
+vault_of = rootof.obsidian_vault_of     # the Obsidian vault (the record style), '' outside one
 
 
 def strip_credentials(url):
-    return re.sub(r"://[^/@\s]+@", "://", url)
+    # everything between :// and the last @ before the path, so a raw @ in a password goes too
+    return re.sub(r"://[^/\s]*@", "://", url)
 
 
 def redact(text):
@@ -125,21 +103,25 @@ def read(path):
         return None
 
 
-def hashes_in(text, root=None):
-    """Hash-shaped tokens of the text, in order. An all-digit token (a date, a count, or
-    one short hash in about 25) counts only when git knows it as a commit, so a date is
-    never listed and never reported missing; a token with a letter is always listed."""
+def hashes_in(text, root=None, ignore=()):
+    """Hash-shaped tokens of the text, in order, with the line each first appears on:
+    [(hash, line)]. A token git knows as a commit always counts. One it doesn't know counts
+    only when it has at least one letter and its line talks about commits (COMMIT_CONTEXT),
+    so a date, a count, a session id in the pointer and a UUID segment are never listed and
+    never reported missing. `ignore` holds known non-commit ids (the sessions' ids)."""
     seen, out = set(), []
-    for m in HASH_RE.finditer(text or ""):
-        h = m.group(1)
-        if h in seen:
-            continue
-        seen.add(h)
-        if h.isdigit() and not (root and commit_exists(root, h)):
-            continue
-        out.append(h)
-        if len(out) >= MAX_HASHES:
-            break
+    for line in (text or "").splitlines():
+        for m in HASH_RE.finditer(line):
+            h = m.group(1)
+            if h in seen or h in ignore:
+                continue
+            seen.add(h)
+            if root and commit_exists(root, h):
+                out.append((h, line))
+            elif not h.isdigit() and COMMIT_CONTEXT.search(line):
+                out.append((h, line))
+            if len(out) >= MAX_HASHES:
+                return out
     return out
 
 
@@ -168,9 +150,9 @@ def git_facts(root):
     f["branch"] = git(root, "branch", "--show-current") or "(detached)"
     f["head"] = git(root, "rev-parse", "--short", "HEAD") or "none"
     f["head_subject"] = git(root, "show", "-s", "--format=%s", "HEAD")
-    up = git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    up = git(root, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}") if f["branch"] != "(detached)" else ""
     f["upstream"] = up or "none"
-    f["ahead"] = f["behind"] = "0"
+    f["ahead"] = f["behind"] = "n/a"   # counts exist only against an upstream
     if up:
         lr = git(root, "rev-list", "--left-right", "--count", "@{u}...HEAD")
         parts = lr.split()
@@ -195,18 +177,20 @@ def git_facts(root):
 
 
 def sessions_since(root, since):
+    """(lines, ids) of the sessions active after `since`, or (None, set()) without a mirror."""
     try:
         import mirror
         home = os.environ.get("HOME") or os.path.expanduser("~")
         items = mirror.sessions_since(root, since, exclude=None, home=home) or []
     except Exception:
-        return None
-    out = []
+        return None, set()
+    out, ids = [], set()
     for it in items:
         host = re.sub(r"\s*\([A-Za-z]+\d+,\d+\)$", "", it.get("machine") or "") or "unknown host"
-        out.append("%s  %s  %s  %s" % ((it.get("ts") or "")[:16], (it.get("id") or "")[:8],
-                                       host, it.get("path") or ""))
-    return out
+        sid = (it.get("id") or "")
+        ids.update({sid, sid[:8]})
+        out.append("%s  %s  %s  %s" % ((it.get("ts") or "")[:16], sid[:8], host, it.get("path") or ""))
+    return out, ids
 
 
 def adr_state(root):
@@ -292,7 +276,7 @@ def print_state(root, kind, save=True):
             since = datetime.datetime.fromtimestamp(os.path.getmtime(brief)).strftime("%Y-%m-%dT%H:%M:%S")
             n = git(root, "rev-list", "--count", "HEAD", "--since=" + since)
             out.append("commits_since_brief=" + (n if n.isdigit() else "unknown"))
-    sessions = sessions_since(root, os.path.getmtime(brief)) if brief_text is not None else None
+    sessions, session_ids = sessions_since(root, os.path.getmtime(brief)) if brief_text is not None else (None, set())
     out.append("sessions_since=" + (str(len(sessions)) if sessions is not None else "unknown"))
     out.append("")
     if g:
@@ -308,8 +292,8 @@ def print_state(root, kind, save=True):
         out.extend(g["remotes"] or ["(none)"])
         out.append("")
         out.append("## hashes named in the brief")
-        hs = hashes_in(brief_text, root)
-        for h in hs:
+        hs = hashes_in(brief_text, root, ignore=session_ids)
+        for h, _line in hs:
             exists, pushed, subject = commit_facts(root, h, g["upstream"] != "none" and g["upstream"], g["has_remote"])
             out.append("%s exists=%s%s" % (h, "yes" if exists else "no",
                                            ("  pushed=%s  %s" % (pushed, subject)) if exists else ""))
@@ -352,16 +336,21 @@ def check(root, kind):
         g = git_facts(root)
         up = g["upstream"] != "none" and g["upstream"]
         print("## hashes")
-        hs = hashes_in(new, root)
-        for h in hs:
+        since = os.path.getmtime(sp) if old is not None else os.path.getmtime(brief)
+        _, session_ids = sessions_since(root, since - 30 * 86400)
+        hs = hashes_in(new, root, ignore=session_ids)
+        for h, _line in hs:
             exists, pushed, subject = commit_facts(root, h, up, g["has_remote"])
             if not exists:
                 print("%s missing: no such commit in this repository" % h)
                 problems += 1
                 continue
+            if pushed not in ("no", "no-remote"):
+                continue
             for ln in new.splitlines():
-                if h in ln and pushed == "no" and PUSHED_WORDS.search(ln) and not NOT_PUSHED.search(ln):
-                    print("%s unpushed, but the brief calls it pushed: %s" % (h, ln.strip()[:120]))
+                if h in ln and PUSHED_WORDS.search(ln) and not NOT_PUSHED.search(ln):
+                    why = "unpushed" if pushed == "no" else "this repository has no remote"
+                    print("%s %s, but the brief calls it pushed: %s" % (h, why, ln.strip()[:120]))
                     problems += 1
                     break
         if not hs:

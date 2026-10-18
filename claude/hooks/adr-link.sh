@@ -31,6 +31,7 @@
 # ADR dir: detect-and-conform, resolved the same way as /handoff step 1a (see adr_dir).
 set -euo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 NOTES_REF=adr
 err() { printf 'adr-link: %s\n' "$*" >&2; }
 
@@ -432,8 +433,11 @@ cmd_state() {
     # Not a git repo, but it may still HOLD decisions (e.g. a synced vault like
     # ~/Projects). Linkage is git-native (it links ADRs to commits), so it can't
     # apply here, but say so honestly instead of "no decisions".
-    local d2 n=0 f
-    d2=$(_resolve_adr_dir "$PWD")
+    # The root is the vault holding this folder (lib/rootof.py: the configured vault, else
+    # .obsidian or docs/adr above), never the subfolder the session happens to start in.
+    local d2 n=0 f root2
+    root2=$(python3 "$HERE/lib/rootof.py" "$PWD" 2>/dev/null | cut -f1) || root2=""
+    d2=$(_resolve_adr_dir "${root2:-$PWD}")
     for f in "$d2"/[0-9][0-9][0-9][0-9]-*.md; do [ -e "$f" ] || continue; case "$f" in */0000-*) ;; *) n=$((n+1));; esac; done
     if [ "$n" -gt 0 ]; then echo "decision_repo=no_git"; err "$n ADRs here, but this isn't a git repo → linkage doesn't apply (no commits to link to)."
     else echo "decision_repo=no"; err "not a git repo and no ADRs: nothing to do."; fi

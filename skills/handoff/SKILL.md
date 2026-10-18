@@ -58,7 +58,7 @@ Scan THIS conversation for genuine architectural or technical decisions made thi
 
 ### 1a to 1c. Where the records live, and in what style
 
-Run `organism adr-index next`. It prints `adr_dir` (resolved in this order: `.adr-dir`, a log4brains config, the first existing usual folder, else `docs/adr`), `exists`, `count`, `next` with its padding, `pattern`, `style` (vault, plain, madr or unknown), `latest` (the highest record) and `vault` (an `.obsidian` ancestor, or the configured vault root). Respect the project's structure; never impose a second one.
+Run `organism adr-index next --root <root>` (every `adr-index` call takes `--root <root>`, so a session started in a subfolder never gets a subfolder's records). It prints `adr_dir` (resolved in this order: `.adr-dir`, a log4brains config, the first existing usual folder, else `docs/adr`), `exists`, `count`, `next` with its padding, `pattern`, `style` (vault, plain, madr or unknown), `latest` (the highest record) and `vault` (an `.obsidian` ancestor, or the configured vault root). Respect the project's structure; never impose a second one.
 
 - **Records exist:** Read `latest` and conform: the same filename pattern, section template and numbering; no frontmatter or tags the existing records don't use, even in a vault. **Never renumber, rewrite or delete an existing record** (only a status change for supersession).
 - **No records yet:** `NNNN-kebab-title.md` from `next`, with the default template: `# NNNN. <Title>`, then `## Context` (what forced the decision), `## Decision` (stated plainly), `## Consequences` (what it costs and enables), `## Alternatives considered` (omit if none). Plain style adds `- Status: accepted` and `- Date: YYYY-MM-DD` under the title; vault style instead leads with frontmatter `tags: [adr, adr/accepted]` and `date: YYYY-MM-DD`.
@@ -78,11 +78,11 @@ Run `organism adr-index next`. It prints `adr_dir` (resolved in this order: `.ad
 - `CLAUDE.md` without `## Decisions`: append that header and blockquote; touch nothing else.
 - Prepend one line per new decision under the blockquote, newest first, in the format the existing lines use. Default (vault): `- **[[NNNN-kebab-title|DEC-NNNN]]** · YYYY-MM-DD · #adr/accepted — <decision, one line>. _Why:_ <rationale>.` Default (plain): `- **[DEC-NNNN](<relative path>) · YYYY-MM-DD · accepted** — <decision, one line>. _Why:_ <rationale>.` The wikilink target is the record's basename without extension.
 - A superseded entry gets `superseded by [[NEW|DEC-NNNN]]` (vault) or `superseded by DEC-NNNN` (plain); never delete an index line.
-- Then `organism adr-index trim`: it keeps the 20 newest entries and adds the pointer to the rest. Touch nothing in `CLAUDE.md` outside `## Decisions`.
+- Then `organism adr-index trim --root <root>`: it keeps the 20 newest entries and adds the pointer to the rest. Touch nothing in `CLAUDE.md` outside `## Decisions`.
 
 ### 1f. (vault) The decisions MOC
 
-`organism adr-index moc --write` regenerates `<adrdir>/_decisions-moc.md` from every record (Accepted, Superseded, Proposed; newest first), keeping an existing page's header and the lines it already has. The page is owned by this command; never touch any other index or README the project authored.
+`organism adr-index moc --root <root> --write` regenerates `<adrdir>/_decisions-moc.md` from every record (Accepted, Superseded, Proposed; newest first), keeping an existing page's header, section names and order, the lines it already has and any note under a heading. The page is owned by this command; never touch any other index or README the project authored.
 
 ### 1f-bis. Harvest draft: shown, not gated
 
@@ -109,7 +109,7 @@ Only when `$ARGUMENTS` explicitly asks ("push", "and push", "push to origin"; "d
 
 ## 2. Rewrite HANDOFF.md
 
-Run `organism handoff-state` again, before writing (HEAD moved if 0.5 or 1g committed). It prints the facts the brief may state (branch, HEAD, upstream, ahead and behind, pushed or not, the dirty files, the last 8 commits, every hash the current brief names with whether it exists and is pushed, the sessions active since the brief was written, the decision-link state) and saves a copy of the current brief for step 6. Every hash, branch and pushed-or-not claim in the brief is copied from that output; a fact it doesn't show is not written. Outside a git repo it says so: write no git block. An action outside git (a page published, a mail sent, a deploy) has no script proof: write it as "as described by the session" unless its outcome was checked (the live page, the sent mail), and say which.
+Run `organism handoff-state` again, before writing (HEAD moved if 0.5 or 1g committed). It prints the facts the brief may state (branch, HEAD, upstream, ahead and behind, pushed or not, the dirty files, the last 8 commits, every hash the current brief names with whether it exists and is pushed, the sessions active since the brief was written, the decision-link state) and saves a copy of the current brief for the check below. Every hash, branch and pushed-or-not claim in the brief is copied from that output; a fact it doesn't show is not written. Outside a git repo it says so: write no git block. An action outside git (a page published, a mail sent, a deploy) has no script proof: write it as "as described by the session" unless its outcome was checked (the live page, the sent mail), and say which.
 
 Read the existing brief to carry the standing backlog forward, then overwrite `<root>/HANDOFF.md` wholesale with, in order:
 
@@ -118,8 +118,10 @@ Read the existing brief to carry the standing backlog forward, then overwrite `<
 3. **What's live**: working surfaces and capabilities; carry forward, update only what changed.
 4. **Next / open threads**: concrete next steps and anything mid-flight, most actionable first; preserve the standing backlog. **Steps, not identifiers**: say what to do and where the details are (a vault note, a mail subject), never the account, case or order number, address, phone or money figure itself. The brief is gitignored, but it is synced and injected into every session started in this directory.
 5. **How to use this file**: regenerated by `/handoff` (which also commits the records and `CLAUDE.md`); injected at session start; gitignored local state; decisions live as committed records indexed from `CLAUDE.md`'s `## Decisions` (and, in a vault, `[[_decisions-moc]]`).
-6. **A quiet session is said, not skipped**: when the state shows `commits_since_brief=0` and `dirty=0` and step 1 recorded nothing, the report says in one line that the session wrote and decided nothing. The brief is still written: the pointer and the status change, and a run the user started always leaves one.
-7. **Check it**: run `organism handoff-state --check`. It names every hash the new brief cites that doesn't exist or that the brief calls pushed while the upstream lacks it, and lists the open threads the old brief had that the new one dropped. Fix a hash claim before the run ends (edit the brief, run the check again). A dropped thread is allowed when the item is done or moved: list each one in the final report with why it left.
+
+**A quiet session is said, not skipped.** When the state shows `commits_since_brief=0` and `dirty=0` and step 1 recorded nothing, the report says in one line that the session wrote and decided nothing. The brief is still written: the pointer and the status change. The only runs that leave no brief are a secret stop (0.5) and a start outside a repo and a vault (0).
+
+**Check it.** Run `organism handoff-state --check`. It names every hash the new brief cites that doesn't exist, or that the brief calls pushed while the upstream lacks it or the repo has no remote, and lists the open threads the old brief had that the new one dropped. Fix a hash claim before the run ends (edit the brief, run the check again). A dropped thread is allowed when the item is done or moved: list each one in the final report with why it left.
 
 ## Rules
 
