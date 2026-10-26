@@ -35,6 +35,14 @@ All notable changes to Organism are listed here. The format follows
   file, read only when it is used.
 - The README's hook table says the brief loader reads the nearest `HANDOFF.md`; its
   "writes only" line names the MOC page and the retro marker.
+- Session notes in the vault are capped at 300 KB: a longer session keeps its newest
+  turns there under a header line that names the full note, which is written outside
+  the vault to `~/.claude/mirror-archive/sessions/<id>.md` (`CLAUDE_MIRROR_ARCHIVE_DIR`
+  in `paths.env` moves it). Obsidian's indexer runs out of memory on multi-megabyte
+  notes and the window never opens; a 5 MB note did that on 2026-10-26. The reviews
+  read the full note through the header line, `/incognito purge` removes the archived
+  copy too, and `obsidian-mirror.py --trim-oversize` applies the cap to notes already
+  written.
 
 ## [0.1.2] - 2026-10-16
 

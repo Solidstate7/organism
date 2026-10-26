@@ -152,6 +152,7 @@ on anything outbound (a push, a deploy, a web fetch, a connector call that sends
 |---|---|---|
 | `latest.md` | The turn that just finished, in full, then a table of the 30 most recent sessions | You want to see what just happened. Pin it in Obsidian. |
 | `sessions/<id>.md` | One session, every turn, rebuilt from the transcript after each reply | You want to see how you got here. |
+| `~/.claude/mirror-archive/sessions/<id>.md` | The full note of a session whose vault copy passed 300 KB; the vault copy keeps the newest turns and names this file in its header | A long session's early turns, which the vault copy no longer shows. Obsidian cannot index multi-megabyte notes, so the full text stays outside the vault. |
 
 Common secrets (API keys, tokens, private keys, passwords in URLs) are redacted before
 anything is written. This is best effort, not a guarantee. A project can opt out with an

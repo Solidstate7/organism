@@ -180,6 +180,10 @@ def _scrub_mirror():
         file_removed = True
     except FileNotFoundError:
         pass
+    try:
+        os.remove(mod.archive_path(SID))  # the full copy of an over-cap note, outside the vault
+    except OSError:
+        pass
     index_removed = False
     with open(mod.LOCK, "w") as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)

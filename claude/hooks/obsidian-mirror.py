@@ -45,6 +45,13 @@ Layout (under <vault>):
   sessions/<id>.md      per-session full Q&A history, REGENERATED from the
                         transcript each turn (idempotent and self-healing, so
                         a backfill racing a live session can't duplicate turns)
+                        Capped at lib/mirror.MAX_NOTE_BYTES (300 KB): a longer
+                        session keeps its newest turns here under a header
+                        marker, and the full render goes OUTSIDE the vault to
+                        ~/.claude/mirror-archive/sessions/<id>.md
+                        (CLAUDE_MIRROR_ARCHIVE_DIR), because Obsidian's indexer
+                        runs out of memory on multi-MB notes and the window
+                        never opens (Obsidian forum bug 115709; seen 2026-10-26).
 
 Multiple concurrent CLI sessions (e.g. one in Terminal, one in Antigravity)
 all run this same global hook. Per-session files are race-free (the Stop hook
@@ -58,6 +65,9 @@ Backfill mode (manual, not run by the hook machinery):
   obsidian-mirror.py --backfill          regenerate every sessions/<id>.md
                                          (plus latest.md) from its transcript,
                                          in the new format
+  obsidian-mirror.py --trim-oversize     apply the vault-copy cap to the notes
+                                         already in sessions/ (full copy to the
+                                         archive, newest turns kept, mtimes kept)
 
 Sessions whose transcript .jsonl no longer exists are left untouched.
 """
@@ -1079,6 +1089,82 @@ def _turns_in_note(path):
         return 0
 
 
+def archive_path(sid):
+    """Where the FULL render of session `sid` lives when its vault copy is trimmed
+    (lib/mirror.archive_dir, outside the vault); "" when the notes are off."""
+    d = mirror.archive_dir()
+    return os.path.join(d, f"{sid}.md") if d else ""
+
+
+def write_note(sid, body):
+    """Write session `sid`'s note: the vault copy capped at mirror.MAX_NOTE_BYTES (newest
+    turns kept, a header marker naming the full copy) and, when it was trimmed, the full
+    render at archive_path(sid). A note that fits again (an /incognito purge shrank it)
+    takes its stale archive copy with it, so no purged turn outlives the purge. A failed
+    archive write is breadcrumbed and the vault copy is still written (its marker then
+    names a file that is not there; gather() falls back to the copy). Returns (kept, total)."""
+    note = os.path.join(SESS, f"{sid}.md")
+    arc = archive_path(sid)
+    vault_body, kept, total = mirror.trim_note(body, arc)
+    if arc and kept < total:
+        try:
+            os.makedirs(os.path.dirname(arc), exist_ok=True)
+            atomic_write(arc, body)
+        except Exception as e:
+            _breadcrumb(e)
+    elif arc:
+        try:
+            os.remove(arc)
+        except FileNotFoundError:
+            pass
+    atomic_write(note, vault_body)
+    return kept, total
+
+
+def trim_oversize():
+    """Manual: apply the vault-copy cap to the notes already in sessions/ (once, when the
+    cap landed, or after lowering it). A note over mirror.MAX_NOTE_BYTES has its full text
+    copied to archive_path(sid) (unless a copy at least as large is there already) and
+    keeps its newest turns in the vault. Both files keep the note's mtime: nothing new
+    happened to those sessions. Prints a report."""
+    if not VAULT:
+        print("no vault configured: session notes are off; nothing to trim")
+        return
+    cap = mirror.MAX_NOTE_BYTES
+    done, odd = [], []
+    for fn in sorted(os.listdir(SESS)):
+        sid = fn[:-3] if fn.endswith(".md") else ""
+        if not _SESSION_ID.match(sid):
+            continue
+        p = os.path.join(SESS, fn)
+        try:
+            st = os.stat(p)
+        except OSError:
+            continue
+        if st.st_size <= cap:
+            continue
+        with open(p, encoding="utf-8") as f:
+            text = f.read()
+        arc = archive_path(sid)
+        vault_body, kept, total = mirror.trim_note(text, arc)
+        if kept == total:
+            odd.append(sid)
+            print(f"  {sid[:8]}  {st.st_size / 1048576:5.2f} MB  no turn separators, left as is")
+            continue
+        if arc:
+            os.makedirs(os.path.dirname(arc), exist_ok=True)
+            if not os.path.exists(arc) or os.path.getsize(arc) < st.st_size:
+                atomic_write(arc, text)
+                os.utime(arc, (st.st_atime, st.st_mtime))
+        atomic_write(p, vault_body)
+        os.utime(p, (st.st_atime, st.st_mtime))
+        done.append(sid)
+        print(f"  {sid[:8]}  {st.st_size / 1048576:5.2f} MB → {len(vault_body.encode('utf-8')) / 1024:4.0f} KB"
+              f"  kept {kept}/{total} turns")
+    print(f"\ntrimmed {len(done)} note(s) over {cap // 1000} KB; full copies under {mirror.archive_dir()}"
+          + (f"; {len(odd)} left as is (no turn separators)" if odd else ""))
+
+
 def main():
     # Read stdin as UTF-8 explicitly (not the locale default): in a non-UTF-8
     # locale json.load(sys.stdin) would mangle non-ASCII payload, e.g. a
@@ -1153,9 +1239,11 @@ def main():
             # fuller note the SessionEnd pass wrote meanwhile: keep the note with more
             # turns. Both sides are counted the same way, so a reply that quotes a
             # turn header counts on both and never freezes the note.
-            if _turns_in_note(note) > len(mirror.TURN_RE.findall(body)):
+            # The vault copy may be trimmed, so the fuller count is the archive's.
+            if max(_turns_in_note(note), _turns_in_note(archive_path(session))) \
+                    > len(mirror.TURN_RE.findall(body)):
                 return
-            atomic_write(note, body)
+            write_note(session, body)
 
             index = load_index()
             index[session] = current
@@ -1213,7 +1301,7 @@ def backfill():
         if not n:
             empty.append(sid)
             continue
-        atomic_write(os.path.join(SESS, f"{sid}.md"), body)
+        write_note(sid, body)
         if last:
             ts, human, reply, gist, model = last
             last_by_id[sid] = (project, ts, human, reply, model)
@@ -1250,6 +1338,9 @@ def backfill():
 if __name__ == "__main__":
     if "--backfill" in sys.argv[1:]:
         backfill()  # manual mode: let errors surface
+        sys.exit(0)
+    if "--trim-oversize" in sys.argv[1:]:
+        trim_oversize()  # manual mode: let errors surface
         sys.exit(0)
     try:
         main()

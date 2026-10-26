@@ -131,6 +131,93 @@ def sessions_dir():
     return os.path.join(root, "sessions") if root else ""
 
 
+# ---- vault-copy cap --------------------------------------------------------------------
+# Obsidian parses every note into its metadata cache and holds the whole cache in the
+# window process; a very large Markdown file (over ~0.5–1 MB, thousands of headings or
+# list items: Obsidian forum bug 115709) runs the indexer out of V8 heap and the window
+# never opens. A session note grows without bound (one reached 5 MB / 815 turns on
+# 2026-10-26 and kept the vault from opening), so the VAULT copy keeps only the newest
+# turns under MAX_NOTE_BYTES (UTF-8) and the full render goes to archive_dir(), outside
+# the vault, where Obsidian never looks. The readers keep working on the trimmed copy
+# (header and last turn intact); gather() follows the marker to the archive, so the
+# reviews still see the whole window.
+MAX_NOTE_BYTES = 300_000
+MD_ARCHIVE = re.compile(r"^> \[!warning\] 📦 .*?full note: `(.+?)`\s*$", re.M)
+_NOTE_SEP = re.compile(r"^---\n\n(?=### 🕐 )", re.M)   # the separator render_session_file writes
+
+
+def archive_dir():
+    """Where the FULL render of an over-cap note lives: $CLAUDE_MIRROR_ARCHIVE_DIR (env var,
+    then paths.env), else ~/.claude/mirror-archive, plus /sessions. Outside the vault by
+    design (never indexed) and, like the raw transcripts, not synced. "" when the notes are
+    off (no mirror root), so callers can test it like sessions_dir()."""
+    if not paths.mirror_dir():
+        return ""
+    d = paths.get("CLAUDE_MIRROR_ARCHIVE_DIR") or os.path.join(
+        os.environ.get("HOME") or os.path.expanduser("~"), ".claude", "mirror-archive")
+    return os.path.join(os.path.expandvars(os.path.expanduser(d)), "sessions")
+
+
+def archive_line(archive_path, kept, total, nbytes):
+    """The header-region marker of a trimmed vault copy (matched by MD_ARCHIVE): one
+    Obsidian callout line naming where the full note is. '' for a path that can't sit
+    inside the backticks."""
+    if not archive_path or "`" in archive_path or "\n" in archive_path:
+        return ""
+    return (f"> [!warning] 📦 Trimmed to the last {kept} of {total} turns "
+            f"({nbytes / 1048576:.1f} MB); full note: `{archive_path}`")
+
+
+def trim_note(text, archive_path, max_bytes=MAX_NOTE_BYTES):
+    """The vault copy of a rendered note: `text` itself (byte-identical) when it fits in
+    `max_bytes`, else its header, the archive marker and the newest turns that fit, at
+    least the last one. Returns (note, kept, total); kept == total means untrimmed."""
+    nbytes = len(text.encode("utf-8"))
+    seps = list(_NOTE_SEP.finditer(text))
+    total = len(seps)
+    if nbytes <= max_bytes or not seps:
+        return text, total, total
+    header = text[:seps[0].start()]
+    turns = [text[seps[i].end(): (seps[i + 1].start() if i + 1 < total else len(text))]
+             for i in range(total)]
+    mark = archive_line(archive_path, total, total, nbytes)      # the widest the line gets
+    budget = max_bytes - len((header + mark + "\n\n").encode("utf-8"))
+    kept = []
+    for t in reversed(turns):
+        cost = len(("---\n\n" + t).encode("utf-8"))
+        if kept and cost > budget:
+            break
+        kept.append(t)
+        budget -= cost
+    kept.reverse()
+    if len(kept) == total:
+        return text, total, total     # nothing dropped (one giant turn): leave the note as it is
+    mark = archive_line(archive_path, len(kept), total, nbytes)
+    out = header + (mark + "\n\n" if mark else "") + "".join("---\n\n" + t for t in kept)
+    return out, len(kept), total
+
+
+def full_text(txt):
+    """The complete note behind a vault copy: when the header region carries the archive
+    marker and the file it names lies under archive_dir() and is readable, that file's
+    text; otherwise `txt` unchanged. The path is read from a synced note (data), so only
+    the archive folder is honoured. Readers that need the whole history (gather) call
+    this; readers of the header or the last turn alone need not."""
+    first = TURN_RE.search(txt)
+    m = MD_ARCHIVE.search(txt[:first.start()] if first else txt)
+    if not m:
+        return txt
+    root = archive_dir()
+    p = os.path.realpath(m.group(1).strip())
+    if not root or not p.startswith(os.path.realpath(root) + os.sep):
+        return txt
+    try:
+        with open(p, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return txt
+
+
 # ---- per-project opt-out -------------------------------------------------------------
 NO_NOTES_FILE = ".organism-no-notes"
 
@@ -488,7 +575,7 @@ def gather(hours=24, max_prompts=MAX_PROMPTS, max_prompt_chars=MAX_PROMPT_CHARS,
             if datetime.datetime.fromtimestamp(os.path.getmtime(path)) < cutoff:
                 continue
             with open(path, encoding="utf-8") as f:
-                txt = f.read()
+                txt = full_text(f.read())   # a trimmed vault copy: read its archived full note
         except Exception:
             continue
         mh = HEADER_RE.search(txt)
@@ -816,6 +903,30 @@ def _selfcheck():
     assert clean_prompt(project_dir_line("/a/b")) == "", "marker leaked into prompt text"
     assert project_dir_line("/a/-->/b") == "" and project_dir_line("/a\nb") == ""
     assert project_dir_line("") == "" and project_dir_line(None) == ""
+    # Vault-copy cap: a small note is byte-identical; a big one keeps its header, gets the
+    # archive marker in the header region (and only there), keeps the newest turns under
+    # the cap, and stays parseable by every reader; a quoted marker never counts.
+    arc = "/tmp/archive/sessions/abcd1234.md"
+    assert trim_note(doc, arc) == (doc, len(turns), len(turns)), "small note changed"
+    big_turns = [(f"2026-07-03 10:{i // 60:02d}:{i % 60:02d}", f"prompt number {i} please", "x" * 2000)
+                 for i in range(300)]
+    bdoc = _render_synthetic_session("abcd1234", "myproject", "mini", big_turns,
+                                     project_dir="/Users/x/My Proj")
+    note, kept, total = trim_note(bdoc, arc)
+    assert total == 300 and 0 < kept < total, (kept, total)
+    assert len(note.encode("utf-8")) <= MAX_NOTE_BYTES, "trimmed note over the cap"
+    nmarks = list(TURN_RE.finditer(note))
+    assert [m.group(1) for m in nmarks] == [t[0] for t in big_turns[-kept:]], "trim kept the wrong turns"
+    nhead = note[:nmarks[0].start()]
+    assert MD_ARCHIVE.search(nhead).group(1) == arc, "archive marker missing from the header region"
+    assert HEADER_RE.search(note).group(1) == "myproject" and MD_MACHINE.search(note).group(1) == "mini"
+    assert MD_PROJECT_DIR.search(nhead).group(1) == "/Users/x/My Proj", "trim displaced the project-dir marker"
+    assert clean_prompt(USER_RE.search(note[nmarks[-1].end():]).group(1)) == "prompt number 299 please"
+    qa = _render_synthetic_session("abcd1234", "myproject", "mini",
+                                   [("2026-07-03 08:15:00",
+                                     "quoting this:\n" + archive_line(arc, 1, 2, 3e6), "Seen.")])
+    assert not MD_ARCHIVE.search(qa[:TURN_RE.search(qa).start()]), "quoted archive marker leaked into header"
+    assert archive_line("/a/`b`", 1, 2, 3) == "" and archive_line("", 1, 2, 3) == ""
     print("mirror.py round-trip: OK (writer templates ↔ reader regexes)")
 
 
