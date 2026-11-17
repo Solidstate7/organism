@@ -8,6 +8,7 @@ Run:  python3 claude/hooks/tests/test_settingsmerge.py"""
 import glob
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -210,7 +211,7 @@ want = json.loads(json.dumps(HOOKS_JSON["hooks"]).replace("${CLAUDE_PLUGIN_ROOT}
 for groups in want.values():
     for g in groups:
         for hk in g["hooks"]:
-            hk["command"] = hk["command"] + " " + " ".join("'%s'" % a for a in hk.pop("args"))
+            hk["command"] = hk["command"] + " " + " ".join(shlex.quote(a) for a in hk.pop("args"))
 check("settings hooks equal hooks.json with the root filled in, in shell form",
       settings(h).get("hooks") == want)
 check("no exec-form args in settings.json (older CLIs would ignore them)",

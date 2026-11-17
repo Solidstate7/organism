@@ -1,5 +1,5 @@
 {
-  "description": "Organism's hooks: the publish guard, the handoff brief at session start, and the session mirror",
+  "description": "Organism's hooks: the publish guard, the handoff brief at session start, the session mirror, and the fleet ledger",
   "hooks": {
     "PreToolUse": [
       {
@@ -42,6 +42,19 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/fleet.py", "hook"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
@@ -51,6 +64,16 @@
             "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/inject-handoff.sh"],
             "timeout": 10,
             "statusMessage": "Loading project handoff"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/fleet.py", "hook"],
+            "timeout": 10
           }
         ]
       }
@@ -75,6 +98,15 @@
             "type": "command",
             "command": "python3",
             "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/session-end-handoff.py"]
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/claude/hooks/fleet.py", "hook"]
           }
         ]
       }

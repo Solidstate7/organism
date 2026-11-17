@@ -55,7 +55,12 @@ check("marketplace lists the plugin at its own root",
 
 print("plugin: hooks/hooks.json")
 hj = load("hooks/hooks.json")["hooks"]
-check("events are the four Organism uses", set(hj) == {"PreToolUse", "SessionStart", "Stop", "SessionEnd"})
+check("events are the five Organism uses", set(hj) == {"PreToolUse", "PostToolUse", "SessionStart", "Stop", "SessionEnd"})
+check("PostToolUse is the fleet ledger on SendMessage only",
+      [g.get("matcher") for g in hj["PostToolUse"]] == ["SendMessage"]
+      and all(hk["args"][-1] == "hook" and hk["args"][0].endswith("/fleet.py") for g in hj["PostToolUse"] for hk in g["hooks"]))
+check("the fleet hook runs at SessionStart and SessionEnd too",
+      all(any(hk["args"][0].endswith("/fleet.py") for g in hj[ev] for hk in g["hooks"]) for ev in ("SessionStart", "SessionEnd")))
 check("PreToolUse matchers: Bash, MCP tools, web tools",
       [g.get("matcher") for g in hj["PreToolUse"]] == ["Bash", "mcp__.*", "WebFetch|WebSearch"])
 all_hooks = [(ev, g, hk) for ev, groups in hj.items() for g in groups for hk in g["hooks"]]
@@ -142,7 +147,7 @@ else:
                            capture_output=True, text=True, timeout=120)
         out = r.stdout
         check("plugin details: 3 skills", re.search(r"Skills \(3\)", out) is not None)
-        check("plugin details: 4 hook events", re.search(r"Hooks \(4\)", out) is not None)
+        check("plugin details: 5 hook events", re.search(r"Hooks \(5\)", out) is not None)
     except subprocess.TimeoutExpired:
         check("claude CLI answered in time", False)
     finally:

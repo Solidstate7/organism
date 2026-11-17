@@ -14,8 +14,9 @@ behind the code that your agent writes. It does three things:
 
 It's plain files, a few hooks and a few scripts. No server, no database, no vector
 store: everything opens in a text editor and lives in git or in your own folder.
-Organism doesn't run agents or make them smarter. It keeps a record of your part of the
-work.
+Organism doesn't make agents smarter. It keeps a record of your part of the work. If you
+run several sessions at once, the optional [fleet](docs/FLEET.md) commands also start and
+stop them and keep a log of each one.
 
 ## Install
 
@@ -185,6 +186,7 @@ These hooks run without any input from you:
 | Brief loading | Session start | Loads the nearest `HANDOFF.md` above the folder in which the session started, then lists the sessions that ran after it was written, each linked to its note. |
 | Session close | Session end | Adds the final exchange to the note, and runs the doc check if you turned it on. |
 | Publish guard | Before `Bash`, connector, web fetch and web search calls | Blocks a push, deploy, upload or web request that contains a term from your blocked list. |
+| Fleet ledger | Session start and end, and after `SendMessage` | Logs when an agent is summoned, harvested or resummoned, and the first line of each order and report. Does nothing until you write a fleet roster. |
 
 The plugin also puts an `organism` command on the path of Claude's own shell, for
 maintenance. Ask Claude to run `organism help` for the list. `organism doctor` checks the
@@ -201,7 +203,8 @@ install.
 
 ## Optional extras
 
-Each one has a section in [docs/ADVANCED.md](docs/ADVANCED.md).
+Each one has a section in [docs/ADVANCED.md](docs/ADVANCED.md), except the fleet, which
+has its own page.
 
 - [The publish guard](docs/ADVANCED.md#the-publish-guard) blocks a push, deploy, upload
   or web request that would send a term from your private list, such as a project
@@ -214,6 +217,12 @@ Each one has a section in [docs/ADVANCED.md](docs/ADVANCED.md).
   the steps.
 - [Alerts](docs/ADVANCED.md#alerts) go to a macOS notification, and to your phone if you
   set up a Telegram bot.
+- [The fleet](docs/FLEET.md) is for running several sessions at once, one per repo.
+  `organism fleet up` summons an agent, `down` harvests it (`/handoff`, then `/exit`), and
+  `up` on a harvested agent resummons it: a fresh session that starts from the brief.
+  `fleet list` shows each agent's state and how many generations it has had, and `fleet
+  ledger` shows the log. Starting and stopping sessions needs herdr-core. Without it,
+  `up` prints the command to run, and the log still works.
 - [The doc check](docs/ADVANCED.md#the-doc-check-experimental) is experimental and off
   until you turn it on in setup. It keeps a status table on one vault page per repo
   (latest commit, branch, uncommitted files, record count). It doesn't read your prose.

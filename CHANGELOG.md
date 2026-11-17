@@ -4,6 +4,39 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - Unreleased
+
+### Added
+
+- `organism fleet`, for running several Claude Code sessions at once, one per repo. An
+  agent's life has four steps: summon (a fresh session in the repo), work (orders in,
+  reports out), harvest (`/handoff` rewrites the brief, then `/exit`) and resummon (the
+  next fresh session, which starts from that brief). Each fresh session is one generation.
+  - `fleet list`: each agent's state (live, harvested with the date of its brief, closed,
+    or never summoned), its number of generations and its role.
+  - `fleet up <name>` summons an agent, or resummons it when it has lived before. It
+    says which first. `summon` and `resummon` are other names for it.
+  - `fleet down <name>` harvests a live agent and stops if the brief was not rewritten.
+    `harvest` is another name for it. An agent with `"handoff": false` in the roster, or
+    `--no-handoff`, is closed without `/handoff`.
+  - `fleet ledger`: the log, filtered with `--since` and `--agent`, as JSON with
+    `--json`, or written as a Markdown table to a file you name with `--md`. It never
+    replaces a file it didn't write unless you add `--force`.
+  - `--dry` on `up` and `down` prints the plan and changes nothing.
+- The fleet roster: a JSON file listing each agent's name, repo, model, effort, brief and
+  role. `config/organism-fleet.example.json` is a copy to start from, and
+  [docs/FLEET.md](docs/FLEET.md) explains each field. Without a roster, nothing in the
+  fleet runs.
+- The fleet ledger, a log at `~/.claude/state/fleet-ledger.jsonl` that only grows. Hooks
+  write it, so sessions started by hand count too. Session start records a summon,
+  resummon or resume, with the session a resummon continues and the brief it starts from
+  (path, time and hash). Session end records a harvest when the brief was rewritten, or
+  a close and why. After `SendMessage`, it records an order, a report or a message
+  between agents. Only the first line of a message is kept, after secret redaction.
+- herdr-core is optional. `fleet up` and `fleet down` use it to open and type into
+  terminals. Without it, `up` prints the command to run in the repo, and `down` refuses
+  and says how to harvest by hand.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added
