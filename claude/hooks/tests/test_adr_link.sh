@@ -201,4 +201,31 @@ mkdir -p "$T/nogit/docs/decisions"; printf '# 0001\n' > "$T/nogit/docs/decisions
 st=$(cd "$T/nogit" && GIT_CEILING_DIRECTORIES="$T" bash "$AL" state 2>/dev/null)
 check "outside git, state finds docs/decisions too"       "$(printf '%s\n' "$st" | grep -qx 'decision_repo=no_git' && echo 1 || echo 0)"
 
+say "one record per decision: --list, then link each commit to its own record"
+fresh "$T/units"
+echo a > a.py; WA=$(ca 300 "feat: the first decision's change")
+echo b > b.py; WB=$(ca 240 "feat: the second decision's change")
+echo c > c.py; WC=$(ca 180 "fix: a change nobody decided")
+mkdir -p docs/adr; printf '# 0001\n' > docs/adr/0001-first.md; printf '# 0002\n' > docs/adr/0002-second.md
+REC=$(ca 0 "docs(adr): record 0001..0002")
+l=$(bash "$AL" link-session --list 2>/dev/null)
+row() { printf '%s\n' "$l" | grep -e "$1"; }
+check "--list shows the three work commits"               "$( [ "$(printf '%s\n' "$l" | grep -c .)" = 3 ] && echo 1 || echo 0)"
+check "each one has no record yet"                        "$( [ "$(printf '%s\n' "$l" | grep -c ' none ')" = 3 ] && echo 1 || echo 0)"
+check "the record commit is not listed"                   "$( inq "$l" "$REC" && echo 0 || echo 1)"
+check "--list writes no link"                             "$( [ -z "$(git notes --ref=adr list 2>/dev/null)" ] && echo 1 || echo 0)"
+bash "$AL" link "$WA" 1 2>/dev/null; bash "$AL" link "$WB" 2 2>/dev/null
+l=$(bash "$AL" link-session --list 2>/dev/null)
+check "the first commit shows its own record only"        "$( row "$WA" | grep -q 'ADR-0001' && ! row "$WA" | grep -q 'ADR-0002' && echo 1 || echo 0)"
+check "the second commit shows its own record only"       "$( row "$WB" | grep -q 'ADR-0002' && ! row "$WB" | grep -q 'ADR-0001' && echo 1 || echo 0)"
+check "the third commit still shows none"                 "$( row "$WC" | grep -q ' none ' && echo 1 || echo 0)"
+msg=$(bash "$AL" link-session --list 2>&1 >/dev/null)
+check "the summary counts the commit with no record"      "$( inq "$msg" '3 work-commit(s)' && inq "$msg" '1 with no decision record' && echo 1 || echo 0)"
+q=$(bash "$AL" query 1 2>/dev/null)
+check "record 1 lists its own commit, not the others"     "$( inq "$q" "$WA" && ! inq "$q" "$WB" && ! inq "$q" "$WC" && echo 1 || echo 0)"
+bash "$AL" link-session --list 1 >/dev/null 2>&1; rc=$?
+check "--list with a number is refused (exit 2)"          "$( [ "$rc" = 2 ] && echo 1 || echo 0)"
+l=$(bash "$AL" link-session --list --since "200 seconds ago" 2>/dev/null)
+check "--list keeps the time bound"                       "$( inq "$l" "$WC" && ! inq "$l" "$WA" && echo 1 || echo 0)"
+
 if [ "$FAILS" -eq 0 ]; then say "ALL PASS"; exit 0; else say "FAILED: $FAILS case(s)"; exit 1; fi

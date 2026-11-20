@@ -39,7 +39,7 @@ Before anything is staged (paths under `<root>`, never relative to the session's
 The record must land in git AFTER the work it describes. 1g stages only `CLAUDE.md` and the ADR dir, so implementation left uncommitted would follow its own record. Three starting states:
 
 - **Dirty tree** (`dirty_work>0`): the procedure below commits it, code before record. The user never has to remember a manual commit.
-- **Clean tree, the user committed during the session**: nothing to commit. **Never re-commit, amend, squash or rewrite the user's commits.** 1g-bis links the untrailered work commits since the last handoff to the new records; 1.5 `backfill` catches the ones already trailered `ADR: <n>` (those link to their own record, and link-session skips them).
+- **Clean tree, the user committed during the session**: nothing to commit. **Never re-commit, amend, squash or rewrite the user's commits.** 1g-bis links each untrailered work commit since the last handoff to the record it carries out; 1.5 `backfill` catches the ones already trailered `ADR: <n>` (those link to their own record, and link-session skips them).
 - **Mixed**: commit only the dirty remainder; the manual commits are handled as above.
 
 If `dirty_work>0`:
@@ -48,13 +48,25 @@ If `dirty_work>0`:
 2. **Byproduct check.** `organism adr-link ignore-scan` lists directories of likely generated files as `<dir>  <count>  <reason>`. For each one the user confirms is byproduct: add it to `.gitignore`, `git rm -r --cached <dir>` if tracked, and commit that separately first: `git commit -m "chore: stop tracking generated <dir>" -m "ADR: none"`. Empty output: nothing to do.
 3. **Safety gate.** Scan the list for untracked secrets (`.env`, `*.key`, `*.pem`, token or credential files), large binaries or build artifacts outside `.gitignore`, and files plainly unrelated to this session. **A secret stops the run:** commit nothing, write no record and no brief, and report each secret's path (never its contents) so the user can remove or ignore it and run `/harvest` again. Binaries, artifacts and unrelated files are left out (`git add -A -- <root> ':(exclude)<root>/<path>'` for each; `<root>`, not `.`, so a run from a subfolder stages the whole tree) and listed in the 1f-bis draft. Ask nothing here.
 4. Author a real conventional-commit message from the session (subject, body bullets if several features); never a generic "wip".
-5. One implementation commit, before the record: `git add -A` (with the exclusions), then `git commit -m "<summary>" -m "ADR: none"`. `ADR: none` because the number is minted in step 1; 1g-bis links this commit afterwards. One commit per decision is fine when the mapping is obvious, but one honest bulk commit is the floor; never block on slicing.
+5. One implementation commit, before the record: `git add -A` (with the exclusions), then `git commit -m "<summary>" -m "ADR: none"`. `ADR: none` because the number is minted in step 1; 1g-bis links this commit afterwards. When the uncommitted work carries more than one decision (look ahead to step 1) and the files separate cleanly, make one commit per decision, so each record can name its own commits. When they don't separate, make one honest commit: by the unit test in step 1 those choices are then one record. Never block on slicing, and never split inside a file.
 
 ## 1. Harvest decisions
 
 Scan THIS conversation for genuine architectural or technical decisions made this session: a choice with a rationale and a consequence (a format, protocol, dependency or structure pick, "X over Y because Z", a trade-off deliberately accepted). `$ARGUMENTS` is a candidate too. Ignore routine edits, bug fixes and discussion that never resolved. **If nothing qualifies, skip all of step 1**: never invent decisions, never create empty dirs or files.
 
 **Scope test.** A candidate qualifies only if it is about *this* project, the repo at `<root>`: its code, tooling, data, what it commits, runs or publishes. A side project's design, a personal errand, a tool choice for another repo are real decisions that belong elsewhere; recording them here puts another project's (or the user's private) context into this repo's committed records. Do not write a record for them: list them in the 1f-bis draft under "Decided elsewhere, not recorded here", one line each (the decision and its project), so the user can run `/harvest` there. When unsure whether a decision is this project's, it is not: do less.
+
+### What counts as one decision
+
+A session can hold several decisions, and several choices can be one decision. Settle the units before writing anything, with three checks:
+
+1. **It can be reversed alone.** If this choice could be undone while the others stay, it is its own unit. Choices that only make sense together are one unit.
+2. **It has its own commits.** `organism adr-link link-session --list --since "<session start, local YYYY-MM-DD HH:MM>"` prints the session's work commits (drop `--since` when unknown; add `--all` under the same condition as in 1g-bis). Give each commit to the one decision it carries out, or to none. Two candidates that end up with exactly the same commits can't be told apart in the code: merge them into one record whose Decision section states each choice. A commit that really carries two decisions which other commits separate may go to both; that is the exception.
+3. **No commit yet is still a decision.** A choice that was made but not built gets a record too. Say in its Consequences that it is decided and not built; 1g-bis links nothing to it.
+
+A commit given to none is not an error. It is a routine edit or a fix, or it is a choice the agent made on its own that nobody decided in the conversation. Keep the list: the draft in 1f-bis shows it, because these are the changes that no record explains. If one of them turns out to hold a real choice with a rationale and a consequence, it is a candidate like any other.
+
+Outside git there are no commits to check: use the first and third checks only.
 
 ### 1a to 1c. Where the records live, and in what style
 
@@ -66,7 +78,7 @@ Run `organism adr-index next --root <root>` (every `adr-index` call takes `--roo
 
 ### 1d. Write one record per new decision
 
-`<adrdir>/<NNNN>-<kebab-title>.md`, filled from the session (real context, not boilerplate), status accepted, today's date.
+One record per unit from the checks above, never one record for the whole session and never one per small choice inside a unit. `<adrdir>/<NNNN>-<kebab-title>.md`, filled from the session (real context, not boilerplate), status accepted, today's date. The Context says who made the choice: the user in the conversation, or the agent without being asked. Say the second plainly; the user reads the draft to catch exactly those.
 
 **Privacy rule.** A record is committed, and a committed file can be pushed or made public later. Write the *situation*, never the *identifiers*: no account, customer, order or case numbers; no addresses, phone numbers or e-mail addresses; no money figures tied to a person; no names of third parties; no credentials, tokens or keys. Say "a prepaid mobile contract" or "the landlord thread"; the specifics stay in `HANDOFF.md` or the session mirror, which never enter git. Quote the user in `provenance` only when the quote carries none of these. The same rule binds the index line. 1g scans the records against the Confidential Terms list; this rule covers what no list can enumerate.
 
@@ -86,7 +98,7 @@ Run `organism adr-index next --root <root>` (every `adr-index` call takes `--roo
 
 ### 1f-bis. Harvest draft: shown, not gated
 
-Running the command is the approval; a second "approve?" would be one judgement more than the user needs to spend. After writing 1d to 1f, show a concise draft: each new or changed record (id, title, one-line decision, status); the index lines added or changed; "Decided elsewhere, not recorded here" (omit when empty). Then go straight to 1g. A wrong record is fixed the standing way: edit or supersede, and the next handoff commits it. If the user interrupts or objects mid-run, stop before 1g, leave the drafts on disk and note "awaiting revision" in the brief's open threads.
+Running the command is the approval; a second "approve?" would be one judgement more than the user needs to spend. After writing 1d to 1f, show a concise draft: each new or changed record (id, title, one-line decision, status, who made the choice, and the commits given to it by short hash and subject, or "decided, not built"); the work commits given to no record, under "Changed without a decision", one line each (omit when empty); the index lines added or changed; "Decided elsewhere, not recorded here" (omit when empty). Then go straight to 1g. The split into units and the commit assignment are the agent's judgement and can be wrong: when the user corrects either in reply to the draft, merge, split or reassign as told before 1g. A wrong record is fixed the standing way: edit or supersede, and the next handoff commits it. If the user interrupts or objects mid-run, stop before 1g, leave the drafts on disk and note "awaiting revision" in the brief's open threads.
 
 ### 1g. Commit the durable records (git repos only)
 
@@ -97,7 +109,14 @@ Running the command is the approval; a second "approve?" would be one judgement 
 
 ### 1g-bis. Link this session's work to the new records (forward only)
 
-Skip in retro, when step 1 wrote nothing, or without `organism adr-link`. A decision gets its number only now, so the commits that implemented it carry no trailer and `backfill` can't see them. For each new number `N`: `organism adr-link link-session --since "<session start, local YYYY-MM-DD HH:MM>" <N>` (drop `--since` when unknown; options before the numbers). It links every work commit since the last handoff, bounded by the later of `--since` and the brief's last write (24 hours when there is no earlier record), skipping doc and maintenance commits. Report its line about older commits left out; never re-run with `--all` to reach before this session (that is retro's job), except when it says `HANDOFF.md` was written after `--since` and this session wrote it: then re-run once with `--all --since "<session start>"`. Several decisions in one run link every work commit to each of them; refine the notes later if wanted.
+Skip in retro, when step 1 wrote nothing, or without `organism adr-link`. A decision gets its number only now, so the commits that implemented it carry no trailer and `backfill` can't see them. Link each record to its own commits and to no others, so that a commit answers "which decision is this?" with one record, not with every record of the session.
+
+- **One new record, and every listed commit carries it out:** `organism adr-link link-session --since "<session start>" <N>` (options before the number) links them in one call.
+- **Otherwise:** for each commit in the assignment from step 1, `organism adr-link link <commit> <N>`. Link nothing for a commit given to none and nothing for a record that is decided but not built.
+
+Then run `organism adr-link link-session --list --since "<session start>"` once more and check that its output matches the assignment: each commit shows its own record, and the commits given to none show `none`. Report the count of commits with no record.
+
+`link-session` covers the work commits since the last handoff, bounded by the later of `--since` and the brief's last write (24 hours when there is no earlier record), skipping doc and maintenance commits. Report its line about older commits left out; never re-run with `--all` to reach before this session (that is retro's job), except when it says `HANDOFF.md` was written after `--since` and this session wrote it: then re-run once with `--all --since "<session start>"`.
 
 ## 1.5. Refresh the record↔commit link index
 

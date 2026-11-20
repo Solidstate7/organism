@@ -348,11 +348,16 @@ cmd_link() {
 # are skipped, they're not work. `--dry` prints the selection without writing notes.
 # Options go before the ADR numbers; a number with no record file is reported and
 # skipped before anything is linked.
+# `--list` takes no numbers and writes nothing: it prints each work commit of the same
+# range with the records it is linked to already, or `none`. /harvest reads it to give
+# each commit to the one decision it carries out (`link <commit> <N>`), and again
+# afterwards to show the commits that no decision covers.
 cmd_link_session() {
-  local dry=0 all=0 since=""
+  local dry=0 all=0 since="" list=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --dry) dry=1; shift ;;
+      --list) list=1; shift ;;
       --all) all=1; shift ;;
       --since|--since=*)
         if [ "$1" = --since ]; then since=${2:-}; shift; else since=${1#--since=}; fi; shift || true
@@ -360,7 +365,11 @@ cmd_link_session() {
       *) break ;;
     esac
   done
-  [ "$#" -ge 1 ] || { err "link-session: ADR number(s) required"; exit 2; }
+  if [ "$list" = 1 ]; then
+    [ "$#" -eq 0 ] || { err "link-session: --list takes no ADR numbers"; exit 2; }
+  else
+    [ "$#" -ge 1 ] || { err "link-session: ADR number(s) required"; exit 2; }
+  fi
   local root; root=$(repo_root) || { err "link-session: not a git repo"; exit 1; }; cd "$root"
   local d adrrel prev range H ct linked=0 skipped=0 older=0
   d=$(adr_dir); adrrel=${d#"$root"/}
@@ -374,7 +383,7 @@ cmd_link_session() {
     adr_file_for "$n" >/dev/null || { err "link-session: ADR-$(printf '%04d' "$n") has no file in ${adrrel}; skipped"; continue; }
     nums="$nums $n"
   done
-  [ -n "$nums" ] || { err "link-session: none of the ADR numbers has a file in ${adrrel}; nothing linked"; exit 1; }
+  [ "$list" = 1 ] || [ -n "$nums" ] || { err "link-session: none of the ADR numbers has a file in ${adrrel}; nothing linked"; exit 1; }
   # shellcheck disable=SC2086
   set -- $nums
   prev=$(git log -F --grep='docs(adr):' --max-count=1 --format='%H' "HEAD^" 2>/dev/null || true)
@@ -396,10 +405,19 @@ cmd_link_session() {
   if [ "$all" = 0 ] && [ -z "$bound" ] && [ -z "$prev" ]; then
     bound=$(( $(date +%s) - 86400 )); why="the 24-hour default: no earlier record, no HANDOFF.md, no --since"
   fi
-  local selfdecl=0
+  local selfdecl=0 has nolink=0
   while read -r ct H; do
     [ -n "$H" ] || continue
     if [ -n "$bound" ] && [ "$ct" -lt "$bound" ]; then older=$((older+1)); continue; fi
+    if [ "$list" = 1 ]; then
+      has=$({ git notes --ref="$NOTES_REF" show "$H" 2>/dev/null || true
+              git show -s --format='%(trailers:key=ADR,valueonly)' "$H" 2>/dev/null || true; } \
+            | extract_vals | sort -un | while IFS= read -r n; do printf 'ADR-%04d ' "$n"; done)
+      if [ -z "$has" ] && ! _is_work "$H" "$adrrel"; then skipped=$((skipped+1)); continue; fi
+      linked=$((linked+1)); [ -n "$has" ] || nolink=$((nolink+1))
+      printf '  %s  %-9s  %s\n' "$(git rev-parse --short "$H")" "${has:-none}" "$(git log -1 --format='%s' "$H" | cut -c1-70)"
+      continue
+    fi
     # a commit that already declares its decision (ADR: <n> trailer, manually authored
     # or enforcer-prompted) is linked by backfill to ITS OWN ADR, blanket-linking it
     # to every newly harvested ADR would pollute both sides.
@@ -413,7 +431,11 @@ cmd_link_session() {
       else err "link-session: could not link $(git rev-parse --short "$H")"; fi
     else skipped=$((skipped+1)); fi
   done < <(git rev-list --no-merges --timestamp "$range" 2>/dev/null)
+  if [ "$list" = 1 ]; then
+    err "link-session: $linked work-commit(s) over '$range'$( [ -n "$bound" ] && echo " since $(_when "$bound")"), $nolink with no decision record; skipped $skipped doc/maintenance commit(s)."
+  else
   err "link-session: $( [ "$dry" = 1 ] && echo 'would link' || echo linked) $linked work-commit(s) over '$range'$( [ -n "$bound" ] && echo " since $(_when "$bound")") -> $(for n in "$@"; do printf 'ADR-%04d ' "$n"; done); skipped $skipped doc/maintenance + $selfdecl self-declared (own ADR: trailer) commit(s)."
+  fi
   if [ "$older" -gt 0 ]; then
     err "link-session: left out $older older commit(s), from before $(_when "$bound") ($why). To include them, re-run with --all --since <earlier date>, or --all alone to drop the time bound."
     # the brief can be written during the session too (an interrupted /harvest notes
@@ -577,5 +599,5 @@ case "${1:-}" in
   retro-checkpoint) shift; cmd_retro_checkpoint "$@" ;;
   ignore-scan)      cmd_ignore_scan ;;
   query)            shift; cmd_query "$@" ;;
-  *) err "usage: adr-link.sh {state|commit-msg <file>|backfill|backlinks [write]|link <commit> <N...>|link-session [--dry] [--since <date>] [--all] <N...>|retro-checkpoint [set|clear|show]|ignore-scan|query <N|hash>}"; exit 2 ;;
+  *) err "usage: adr-link.sh {state|commit-msg <file>|backfill|backlinks [write]|link <commit> <N...>|link-session [--dry] [--since <date>] [--all] <N...>|link-session --list [--since <date>] [--all]|retro-checkpoint [set|clear|show]|ignore-scan|query <N|hash>}"; exit 2 ;;
 esac
