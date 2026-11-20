@@ -29,14 +29,21 @@ by hand:
 
 `up` and `down` drive the terminal through herdr-core (`hc`). Without it, `up` prints the
 command to run and `down` refuses (run /handoff and /exit in the session yourself).
+`up` answers one prompt itself: the folder-trust question, with Yes (the roster names the
+repo). `down` acts on the session running in the agent's terminal and answers no dialog:
+a permission request or a question during /handoff stops it with the session left open.
+The one key it presses unasked is Esc on /exit's unsent-feedback-draft dialog, which
+discards the draft. The hook never fails a session: a roster it can't read means no work.
 Run:  python3 claude/hooks/fleet.py <command>
 """
 import datetime
+import fcntl
 import glob
 import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -48,6 +55,19 @@ DEFAULT_LAUNCH = "claude --model {model} --effort {effort}"
 LIFE = ("summon", "resummon", "resume", "harvest", "close")
 LINE_MAX = 200
 MD_MARK = "<!-- written by organism fleet ledger; rewritten on each run -->"
+NAME_RE = r"[A-Za-z0-9][A-Za-z0-9._-]*"
+STR_FIELDS = ("repo", "brief", "model", "effort", "launch", "role")
+
+
+def _tick():
+    """Seconds per second of waiting in up and down; tests shrink it with ORGANISM_FLEET_TICK."""
+    try:
+        return max(float(os.environ.get("ORGANISM_FLEET_TICK") or 1), 0.0)
+    except ValueError:
+        return 1.0
+
+
+TICK = _tick()
 
 
 # ---- config and ledger -----------------------------------------------------------------
@@ -69,11 +89,24 @@ def load_config(strict=True):
     try:
         with open(p, encoding="utf-8") as fh:
             raw = json.load(fh)
+        if not isinstance(raw, dict):
+            raise ValueError("the roster is a JSON object with an \"agents\" list")
+        if not isinstance(raw.get("agents", []), list):
+            raise ValueError("\"agents\" is a list of objects, one per agent")
+        for k in ("herdr", "launch", "shell", "handoff_command"):
+            if k in raw and not isinstance(raw[k], str):
+                raise ValueError(f"\"{k}\" is a string")
         agents = {}
         for a in raw.get("agents", []):
+            if not isinstance(a, dict):
+                raise ValueError(f"each agent is an object with a name and a repo, not {a!r}")
             name, repo = a.get("name"), a.get("repo")
-            if not name or not repo or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+            if not isinstance(name, str) or not isinstance(repo, str) or not repo \
+                    or not re.fullmatch(NAME_RE, name):
                 raise ValueError(f"an agent needs a name (letters, digits, . _ -) and a repo: {a!r}")
+            bad = [k for k in STR_FIELDS if k in a and not isinstance(a[k], str)]
+            if bad:
+                raise ValueError(f"agent {name}: {', '.join(bad)} must be text")
             if name in agents:
                 raise ValueError(f"agent {name} is listed twice")
             agents[name] = dict(a, repo=_real(repo),
@@ -86,7 +119,7 @@ def load_config(strict=True):
         if strict:
             sys.exit(f"organism fleet: no roster at {p}\n  docs/FLEET.md shows the format "
                      "(ORGANISM_FLEET_CONFIG points elsewhere)")
-    except (OSError, ValueError) as ex:
+    except (OSError, ValueError, TypeError, AttributeError) as ex:
         if strict:
             sys.exit(f"organism fleet: the roster {p} can't be read: {ex}")
     return None
@@ -101,6 +134,9 @@ def append(event):
     p = ledger_path()
     os.makedirs(os.path.dirname(p), exist_ok=True)
     line = (json.dumps(dict({"ts": now()}, **event), ensure_ascii=False) + "\n").encode("utf-8")
+    delay = os.environ.get("ORGANISM_FLEET_TEST_APPEND_DELAY")
+    if delay:
+        time.sleep(float(delay))      # tests widen the gap between the duplicate check and the write
     fd = os.open(p, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     try:
         os.write(fd, line)
@@ -193,15 +229,17 @@ def live_session(cfg, name, reg=None):
 
 
 def resolve_recipient(cfg, to):
-    """(agent or None, label) for a SendMessage `to`: a uds: address, a session name or an agent name."""
+    """(agent or None, label, known) for a SendMessage `to`. Known: an address (uds:, bridge:...),
+    a live session's name or an agent in the roster. Anything else ("main", a subagent's name
+    or id) is a teammate inside one session, not fleet traffic."""
     to = str(to or "")
     sock = to[4:] if to.startswith("uds:") else None
     for d in registry():
         if (sock and d.get("messagingSocketPath") == sock) or (not sock and d.get("name") == to):
-            return agent_for(cfg, d.get("cwd")), d.get("name") or to
+            return agent_for(cfg, d.get("cwd")), d.get("name") or to, True
     if to in cfg["agents"]:
-        return to, to
-    return None, to
+        return to, to, True
+    return None, to, bool(re.match(r"[a-z][a-z0-9+.-]*:", to))
 
 
 def own_session():
@@ -252,8 +290,8 @@ def on_session_start(cfg, p):
         return                      # headless runs (claude -p, the SDK) are jobs, not fleet sessions
     name = agent_for(cfg, os.environ.get("CLAUDE_PROJECT_DIR") or p.get("cwd"))
     sid, source = p.get("session_id"), p.get("source", "startup")
-    if not name or not sid or source not in ("startup", "resume"):
-        return
+    if not name or not sid or source not in ("startup", "resume", "clear"):
+        return                      # compact keeps the session; /clear starts a new one with a new id
     h = history(name)
     if open_start(h, sid) is not None:
         return                      # a second wiring of the same hook (resume keeps the id, so only an open run counts)
@@ -270,6 +308,8 @@ def on_session_start(cfg, p):
         ev["generation"] = len(prev) + 1
         if prev:
             ev["continues"] = prev[-1].get("session")
+        if source == "clear":
+            ev["source"] = "clear"
     append(ev)
 
 
@@ -299,9 +339,13 @@ def on_session_end(cfg, p):
 def on_send(cfg, p):
     if p.get("tool_name") != "SendMessage":
         return
+    if (os.environ.get("CLAUDE_CODE_ENTRYPOINT") or "cli") != "cli":
+        return                      # a headless run's messages are a job's, not a fleet session's
     ti = p.get("tool_input") or {}
     sender = agent_for(cfg, os.environ.get("CLAUDE_PROJECT_DIR") or p.get("cwd"))
-    to_agent, to_label = resolve_recipient(cfg, ti.get("to"))
+    to_agent, to_label, known = resolve_recipient(cfg, ti.get("to"))
+    if not known:
+        return                      # "main" or a subagent: a message inside one session
     if to_agent and to_agent == sender:
         to_agent = None             # a session writing to its own repo's other session: not fleet traffic
     if to_agent and sender:
@@ -313,23 +357,63 @@ def on_send(cfg, p):
     else:
         return
     me = own_session()
-    append({"event": kind, "session": p.get("session_id"), "agent": to_agent if kind == "order" else sender,
-            "from": sender or me.get("name") or "outside the fleet", "to": to_agent or to_label,
-            "line": first_line(ti.get("message", ""))})
+    ev = {"event": kind, "session": p.get("session_id"), "agent": to_agent if kind == "order" else sender,
+          "from": sender or me.get("name") or "outside the fleet", "to": to_agent or to_label,
+          "line": first_line(ti.get("message", ""))}
+    use = p.get("tool_use_id")
+    if use:
+        ev["tool_use"] = use
+    if seen(ev):
+        return                      # a second wiring of the same hook
+    append(ev)
+
+
+def seen(ev):
+    """True when the ledger already holds this tool call: the same tool_use id, or, without
+    one, the same session, kind, recipient and line in the last 10 seconds."""
+    cutoff = datetime.datetime.now().astimezone() - datetime.timedelta(seconds=10)
+    for e in reversed(events()[-200:]):
+        if ev.get("tool_use"):
+            if e.get("tool_use") == ev["tool_use"]:
+                return True
+            continue
+        try:
+            if datetime.datetime.fromisoformat(e.get("ts", "")) < cutoff:
+                break
+        except ValueError:
+            continue
+        if all(e.get(k) == ev.get(k) for k in ("event", "session", "to", "line")):
+            return True
+    return False
 
 
 def cmd_hook():
-    """Entry for the hooks: never fails the session, never prints."""
-    cfg = load_config(strict=False) if os.path.exists(config_path()) else None
-    if not cfg:
-        return 0
+    """Entry for the hooks: never fails the session, never prints to stdout.
+
+    Two wirings of the hook (the plugin and an old settings.json line) can run at the same
+    moment, so the duplicate check and the write happen under one lock on the ledger."""
     try:
+        if not os.path.exists(config_path()):
+            return 0
+        cfg = load_config(strict=False)
+        if not cfg:
+            return 0
         p = json.load(sys.stdin)
+        if not isinstance(p, dict):
+            return 0
         fn = {"SessionStart": on_session_start, "SessionEnd": on_session_end,
               "PostToolUse": on_send}.get(p.get("hook_event_name"))
-        if fn:
+        if not fn:
+            return 0
+        lock = ledger_path() + ".lock"
+        os.makedirs(os.path.dirname(lock), exist_ok=True)
+        fd = os.open(lock, os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
             fn(cfg, p)
-    except Exception as ex:   # the ledger is a record, not a gate
+        finally:
+            os.close(fd)
+    except BaseException as ex:   # the ledger is a record, not a gate
         print(f"organism fleet hook: {type(ex).__name__}: {ex}", file=sys.stderr)
     return 0
 
@@ -369,18 +453,41 @@ class Herdr:
         lines = [l for l in self.screen(t).splitlines() if l.startswith("❯")]
         return lines[-1][1:].strip() if lines else None
 
+    def pids(self, t):
+        """(the terminal's own pid, the pid of the program in its foreground), each int or None."""
+        try:
+            d = json.loads(self.sh("get", t, "--json"))
+        except ValueError:
+            return None, None
+        if not isinstance(d, dict):
+            return None, None
+        fg = d.get("foreground") if isinstance(d.get("foreground"), dict) else {}
+
+        def num(v):
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return None
+        return num(d.get("pid")), num(fg.get("pid"))
+
     def keys(self, t, *k):
         self.sh("keys", t, *k)
-        time.sleep(0.8)
+        time.sleep(0.8 * TICK)
 
     def type_command(self, t, word):
-        """Type /word into an empty box. False (and the slash removed) when the box held typed text."""
+        """Type /word into an empty box. False when the box held typed text (the slash is taken
+        back) or the word didn't arrive intact (the box is emptied, so no later Enter runs it)."""
         self.keys(t, "/")
         if self.box(t) != "/":
             self.keys(t, "backspace")
             return False
         self.keys(t, *list(word))
-        return self.box(t) == "/" + word
+        got = self.box(t)
+        if got == "/" + word:
+            return True
+        if got:
+            self.keys(t, *(["backspace"] * len(got)))
+        return False
 
 
 def herdr(cfg):
@@ -390,8 +497,43 @@ def herdr(cfg):
 
 
 def launch_line(cfg, a, effort):
+    """The launch template with each field shell-quoted (a repo path may hold spaces)."""
     tpl = a.get("launch") or cfg.get("launch") or DEFAULT_LAUNCH
-    return tpl.format(model=a["model"], effort=effort or a["effort"], name=a["name"], repo=a["repo"])
+    vals = {"model": a["model"], "effort": effort or a["effort"], "name": a["name"], "repo": a["repo"]}
+    try:
+        return tpl.format(**{k: shlex.quote(str(v)) for k, v in vals.items()})
+    except (KeyError, IndexError, ValueError, AttributeError) as ex:
+        sys.exit(f"organism fleet: the launch template {tpl!r} can't be filled ({type(ex).__name__}: {ex}).\n"
+                 "  It may use {model} {effort} {name} {repo}; write {{ and }} for a literal brace.")
+
+
+def ancestors(pid, limit=12):
+    """pid's parent, grandparent, ... (ps), stopping at init."""
+    out = []
+    for _ in range(limit):
+        try:
+            r = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
+            pid = int(r.stdout.strip())
+        except (OSError, ValueError, subprocess.SubprocessError):
+            break
+        if pid <= 1:
+            break
+        out.append(pid)
+    return out
+
+
+def terminal_session(cfg, name, hd):
+    """The live session that runs in the agent's terminal: the registry entry whose pid is the
+    terminal's foreground program, or whose ancestors include the terminal's own pid."""
+    repo = cfg["agents"][name]["repo"]
+    tpid, fpid = hd.pids(name)
+    reg = [d for d in registry() if d.get("kind", "interactive") == "interactive"]
+    hit = next((d for d in reg if fpid and int(d["pid"]) == fpid), None)
+    if hit is None and tpid:
+        hit = next((d for d in reg if tpid in ancestors(int(d["pid"]))), None)
+    if hit is not None and not within(hit.get("cwd", ""), repo):
+        return None
+    return hit
 
 
 # ---- commands ----------------------------------------------------------------------------
@@ -449,7 +591,7 @@ def cmd_up(cfg, name, effort=None, dry=False):
     if hd is None or dry:
         print(plan)
         print(("herdr-core (hc) is not installed; start it yourself:" if hd is None else "would run:")
-              + f"\n  cd {a['repo']} && {line}")
+              + f"\n  cd {shlex.quote(a['repo'])} && {line}")
         if hd is None:
             print("The ledger records the start when the session opens.")
         return 0
@@ -460,8 +602,8 @@ def cmd_up(cfg, name, effort=None, dry=False):
     hd.sh("run", "--bg", "--name", name, "--cwd", a["repo"], "--label", "fleet=child", "--no-parent",
           "--no-notify", shell, "-lic", line, check=True)
     t0 = time.time()
-    while time.time() - t0 < 180:
-        time.sleep(3)
+    while time.time() - t0 < 180 * TICK:
+        time.sleep(3 * TICK)
         scr = hd.screen(name)
         if re.search(r"trust (this|the files in this) folder", scr, re.I):
             opts = re.findall(r"^\s*(❯)?\s*(\d)\.\s*(.*)$", scr, re.M)
@@ -492,9 +634,11 @@ def cmd_down(cfg, name, handoff=True, dry=False):
     if hd is None:
         sys.exit("organism fleet down needs herdr-core (hc) to type into the session. "
                  "Harvest it by hand: run /handoff in the session, then /exit.")
-    s = live_session(cfg, name)
-    if not s or name not in hd.terminals():
+    if not live_session(cfg, name) or name not in hd.terminals():
         sys.exit(f"{name} is not live in a fleet terminal")
+    s = terminal_session(cfg, name, hd)
+    if s is None:
+        sys.exit(f"no Claude session of {name} runs in its terminal {name}; nothing was typed")
     if hd.state(name) == "working":
         sys.exit(f"{name} is working; wait for its report first")
     why = None
@@ -511,31 +655,36 @@ def cmd_down(cfg, name, handoff=True, dry=False):
     if not why:
         before = brief_facts(a["brief"])
         if not hd.type_command(name, cmd):
-            sys.exit(f"the prompt box of {name} holds typed text; not touched: {hd.box(name)!r}")
+            sys.exit(f"the prompt box of {name} held typed text, or /{cmd} didn't type cleanly; "
+                     "nothing was sent")
         hd.keys(name, "enter")
-        t0, nudged = time.time(), False
-        while time.time() - t0 < 1200:
-            time.sleep(10)
+        t0 = time.time()
+        while time.time() - t0 < 1200 * TICK:
+            time.sleep(10 * TICK)
             st = hd.state(name)
-            if st == "blocked" and not nudged:
-                hd.keys(name, "enter")      # a one-time question from /handoff; Enter takes its default
-                nudged = True
-                print(f"answered a /{cmd} question with its default (Enter)")
-            elif st in ("idle", "done") and time.time() - t0 > 20:
+            if st == "blocked":         # a dialog: a permission request or a question. Never answered here.
+                sys.exit(f"a dialog is open in {name} during /{cmd}; answer it in the terminal. "
+                         "The session stays open.\n" + hd.screen(name)[-800:])
+            if st in ("idle", "done") and time.time() - t0 > 20 * TICK:
                 break
         after = brief_facts(a["brief"])
         if not after or (before and after["sha256"] == before["sha256"] and after["mtime"] == before["mtime"]):
             sys.exit(f"the brief of {name} was not rewritten; the session stays open")
         print(f"brief written {short(after['mtime'])}")
     if not hd.type_command(name, "exit"):
-        sys.exit(f"the prompt box of {name} holds typed text; not exited: {hd.box(name)!r}")
+        sys.exit(f"the prompt box of {name} held typed text, or /exit didn't type cleanly; not exited")
     hd.keys(name, "enter")
+    esc = False
     for _ in range(30):
-        time.sleep(1)
+        time.sleep(TICK)
         try:
             os.kill(int(s["pid"]), 0)
         except (OSError, KeyError, ValueError):
             break
+        if not esc and re.search(r"unsent feedback draft", hd.screen(name), re.I):
+            hd.keys(name, "esc")        # the one dialog answered here: Esc discards the draft and exits
+            esc = True
+            print("discarded an unsent feedback draft (Esc) so /exit could finish")
     else:
         sys.exit(f"claude pid {s['pid']} still alive 30 s after /exit")
     hd.sh("kill", name)

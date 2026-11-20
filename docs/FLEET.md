@@ -83,13 +83,27 @@ its brief and its role. The state is one of these:
 
 **`fleet up`** starts the agent's session. It says first whether this is a summon or a
 resummon, which generation it will be, and which brief the session starts from. If the
-agent is already live, it says where and starts nothing.
+agent is already live, it says where and starts nothing. When Claude Code asks whether
+you trust the repo's folder, `up` answers yes, since the roster already names that repo.
+It answers no other prompt.
 
-**`fleet down`** harvests a live agent. It types `/handoff` into the session, waits for the
-brief to be rewritten, types `/exit`, and closes the terminal. If the brief was not
-rewritten, it stops and leaves the session running so you can look. It refuses while the
-agent is in the middle of a turn, and it never types over text waiting in the prompt box. For an agent with `"handoff": false`, or with
+The launch command comes from `launch` in the roster (default
+`claude --model {model} --effort {effort}`). Each value is quoted for the shell, so a repo
+path with spaces works. For a literal brace in the template, write `{{` or `}}`.
+
+**`fleet down`** harvests a live agent. It types `/handoff` into the session that runs in
+the agent's terminal, waits for the brief to be rewritten, types `/exit`, and closes the
+terminal. A session you started by hand in the same repo is left alone. If the brief was
+not rewritten, it stops and leaves the session running so you can look. It refuses while
+the agent is in the middle of a turn, and it never types over text waiting in the prompt
+box. If a command doesn't arrive in the box intact, it clears the box and stops, so a
+later Enter can't run half a command. For an agent with `"handoff": false`, or with
 `--no-handoff`, it skips `/handoff` and closes the session.
+
+`down` never answers a dialog. If `/handoff` asks for a permission or asks a question,
+`down` stops, shows the screen and leaves the session open for you to answer. The one
+exception: when `/exit` shows the dialog about an unsent feedback draft, `down` presses
+Esc, which discards the draft and lets the session end.
 
 `--dry` on either command prints the plan and changes nothing.
 
@@ -127,7 +141,14 @@ session notes and is cut at 200 characters. If redaction can't run, the ledger s
 was not recorded.
 
 Only interactive sessions count. A headless `claude -p` run in an agent's repo is a job,
-and the ledger leaves it out.
+and the ledger leaves it out, along with its messages. A message to a subagent or
+teammate inside one session (`main`, or an agent's id) is not recorded either: the ledger
+keeps messages sent to an address, a live session's name or an agent in the roster.
+
+`/clear` starts a new session id, so the ledger records the old one's end (`harvest` or
+`close`) and a `resummon` for the new one, marked `source: clear`. Compacting keeps the
+session and records nothing. If the hook is wired twice (the plugin and an old line in
+`settings.json`), each event is still written once.
 
 Orders and reports are recorded where they are sent, not where they arrive. A message
 that arrives while a session is busy reaches it in the middle of a turn, where no hook

@@ -3,13 +3,21 @@
   - no roster: the hook does nothing, prints nothing, writes no ledger
   - SessionStart in an agent's repo: summon, then resummon with the session it continues,
     the brief it starts from and its generation; resume for `claude --resume`
-  - headless runs, other folders, a second wiring and clear/compact add nothing
+  - headless runs, other folders, a second wiring and compact add nothing; /clear starts
+    the next session (new id); parallel wirings of one hook still record one event
+  - a roster of the wrong shape: the hook exits 0, silent; list says it can't be read
   - SessionEnd: harvest when the brief was rewritten, close (and why) when not, and
     "handoff is off" for an agent whose roster says so
-  - SendMessage: order, report and agent-to-agent message, first line only, redacted, clipped
+  - SendMessage: order, report and agent-to-agent message, first line only, redacted, clipped;
+    in-process recipients (main, a subagent) and headless senders add nothing; one tool
+    call is recorded once however many times the hook runs
   - fleet list: live, harvested, closed, never summoned, generations
   - fleet ledger: --since, --agent, --json, --md (never over a file it didn't write)
-  - up without herdr-core prints the command; down without it refuses; down --dry plans
+  - up without herdr-core prints the command (shell-quoted; a bad template is named);
+    down without it refuses; down --dry plans
+  - down against a fake hc: it picks the session in the agent's terminal, stops on a
+    dialog without answering it, clears a garbled command from the box, and presses Esc
+    only on the unsent-feedback dialog
 Every case uses a temp HOME. Run:  python3 claude/hooks/tests/test_fleet.py"""
 import json
 import os
@@ -71,7 +79,7 @@ class Box:
     def env(self, **kw):
         e = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ORGANISM_FLEET"))}
         e.update(HOME=self.home, CLAUDE_CODE_ENTRYPOINT="cli", CLAUDE_PID=FAKE_PID,
-                 PATH="/usr/bin:/bin")
+                 PATH="/usr/bin:/bin", ORGANISM_FLEET_TICK="0.01")
         e.update(kw)
         return {k: v for k, v in e.items() if v is not None}
 
@@ -90,10 +98,12 @@ class Box:
         return self.hook({"hook_event_name": "SessionEnd", "session_id": sid, "reason": reason,
                           "cwd": self.repos[agent]})
 
-    def send(self, cwd, to, message, sid="s-send", tool="SendMessage"):
+    def send(self, cwd, to, message, sid="s-send", tool="SendMessage", use_id=None, **kw):
+        self.n_sends = getattr(self, "n_sends", 0) + 1
         return self.hook({"hook_event_name": "PostToolUse", "session_id": sid, "cwd": cwd,
                           "tool_name": tool, "tool_input": {"to": to, "message": message},
-                          "tool_response": {}})
+                          "tool_use_id": use_id or f"toolu_{self.n_sends:04d}",
+                          "tool_response": {}}, **kw)
 
     def events(self):
         out = []
@@ -137,6 +147,20 @@ def test_no_roster():
           r.returncode == 0 and r.stdout == "" and not os.path.exists(b.ledger))
     r = b.run("list")
     check("…but fleet list says the roster can't be read", r.returncode != 0 and "can't be read" in r.stderr)
+    for label, text in (("agents as an object", '{"agents": {"web": {"repo": "~/dev/web"}}}'),
+                        ("null", "null"), ("a list", "[]"),
+                        ("a number as a name", '{"agents": [{"name": 5, "repo": "~/dev/web"}]}'),
+                        ("a number as a model", '{"agents": [{"name": "web", "repo": "~/dev/web", "model": 4}]}'),
+                        ("an agent that is a string", '{"agents": ["web"]}')):
+        with open(b.config, "w") as fh:
+            fh.write(text)
+        hooks = [b.start("web", "s1"), b.end("web", "s1"), b.send(b.repos["web"], "uds:/x.sock", "hi")]
+        check(f"roster with {label}: every hook exits 0, silent",
+              all(r.returncode == 0 and r.stdout == "" and "Traceback" not in r.stderr for r in hooks))
+        r = b.run("list")
+        check(f"roster with {label}: list says it can't be read, no traceback",
+              r.returncode != 0 and "can't be read" in r.stderr and "Traceback" not in r.stderr)
+    check("no ledger from a roster of the wrong shape", not os.path.exists(b.ledger))
     b.done()
 
 
@@ -160,9 +184,10 @@ def test_lifecycle():
 
     b.start("web", "s1")
     check("a second wiring of the same SessionStart adds nothing", len(b.events()) == 1)
-    b.start("web", "s1", source="clear")
     b.start("web", "s1", source="compact")
-    check("clear and compact add nothing", len(b.events()) == 1)
+    check("compact adds nothing", len(b.events()) == 1)
+    b.start("web", "s1", source="clear")
+    check("clear with the same session id adds nothing", len(b.events()) == 1)
     b.start("web", "s-headless", CLAUDE_CODE_ENTRYPOINT="sdk-cli")
     check("a headless run (claude -p) is not a fleet session", len(b.events()) == 1)
     b.hook({"hook_event_name": "SessionStart", "session_id": "s-out", "source": "startup",
@@ -195,6 +220,17 @@ def test_lifecycle():
     b.end("web", "s2")
     check("…and its end is recorded once more", b.events()[-1]["event"] == "close")
 
+    b.start("web", "s2", source="resume")
+    b.brief("web", "brief three\n")
+    b.end("web", "s2", reason="clear")
+    check("/clear ends the session: harvest when the brief was rewritten", b.events()[-1]["event"] == "harvest")
+    b.start("web", "s3", source="clear")
+    e = b.events()[-1]
+    check("/clear starts the next session: resummon, generation 3, continues s2, source clear",
+          e["event"] == "resummon" and e.get("generation") == 3 and e.get("continues") == "s2"
+          and e.get("source") == "clear")
+    b.end("web", "s3")
+    check("…and its end is recorded", b.events()[-1]["event"] == "close" and b.events()[-1]["session"] == "s3")
     b.start("api", "a1")
     check("a repo whose brief doesn't exist yet: summon with brief null",
           b.events()[-1]["event"] == "summon" and b.events()[-1].get("brief") is None)
@@ -208,6 +244,27 @@ def test_lifecycle():
     e = b.events()[-1]
     check("handoff off in the roster: the close says so",
           e["event"] == "close" and e.get("why") == "handoff is off in the roster")
+
+    # two wirings of the hook (the plugin and an old settings.json line) run in parallel;
+    # the delay widens the gap between reading the ledger and writing it
+    def parallel(payload, n=4):
+        env = b.env(ORGANISM_FLEET_TEST_APPEND_DELAY="0.3")
+        procs = [subprocess.Popen([sys.executable, FLEET, "hook"], stdin=subprocess.PIPE, env=env,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
+                 for _ in range(n)]
+        for pr in procs:
+            pr.stdin.write(json.dumps(payload))
+            pr.stdin.close()
+        for pr in procs:
+            pr.wait(timeout=60)
+    n = len(b.events())
+    parallel({"hook_event_name": "SessionStart", "session_id": "p1", "source": "startup", "cwd": b.repos["api"]})
+    check("four parallel SessionStart hooks record one start", len(b.events()) == n + 1)
+    parallel({"hook_event_name": "SessionEnd", "session_id": "p1", "reason": "other", "cwd": b.repos["api"]})
+    check("four parallel SessionEnd hooks record one end", len(b.events()) == n + 2)
+    parallel({"hook_event_name": "PostToolUse", "session_id": "p1", "cwd": b.repos["api"], "tool_name": "SendMessage",
+              "tool_use_id": "toolu_par", "tool_input": {"to": "uds:/x.sock", "message": "done"}})
+    check("four parallel PostToolUse hooks record one report", len(b.events()) == n + 3)
     b.done()
 
 
@@ -247,6 +304,17 @@ def test_messages():
     n = len(b.events())
     b.send(outside, "web", "not a send", tool="Bash")
     check("another tool: nothing", len(b.events()) == n)
+    b.send(b.repos["api"], "main", "to the lead of my own session")
+    b.send(b.repos["api"], "a3f9c2e1", "to a subagent")
+    b.send(b.repos["api"], "researcher", "to a named subagent")
+    check("an agent writing to an in-process recipient (main, a subagent): nothing", len(b.events()) == n)
+    b.send(b.repos["api"], "uds:/tmp/socks/elsewhere.sock", "a headless report", CLAUDE_CODE_ENTRYPOINT="sdk-cli")
+    check("a headless run (claude -p) sending a message: nothing", len(b.events()) == n)
+    b.send(b.repos["api"], "uds:/tmp/socks/elsewhere.sock", "once", use_id="toolu_same")
+    b.send(b.repos["api"], "uds:/tmp/socks/elsewhere.sock", "once", use_id="toolu_same")
+    check("the same tool call twice (two wirings): one event", len(b.events()) == n + 1)
+    b.send(b.repos["api"], "uds:/tmp/socks/elsewhere.sock", "once", use_id="toolu_other")
+    check("…but a second call with the same text is its own event", len(b.events()) == n + 2)
     b.done()
 
 
@@ -314,14 +382,16 @@ def test_list_and_ledger():
     b.done()
 
 
-def fake_hc(home, terminals, state="idle"):
+def fake_hc(home, terminals, state="idle", fg=None):
+    """A shell hc; get names fg (default: this test process, the pid of its fake sessions)."""
+    fg = os.getpid() if fg is None else fg
     p = os.path.join(home, "fake-hc")
     with open(p, "w") as fh:
         fh.write("#!/bin/sh\n"
                  f'echo "$@" >> "{home}/hc.log"\n'
                  'case "$1" in\n'
                  f"  ls) echo '{json.dumps({'terminals': [{'name': t} for t in terminals]})}' ;;\n"
-                 f"  get) echo '{json.dumps({'status': {'state': state}})}' ;;\n"
+                 f"  get) echo '{json.dumps({'pid': 1, 'foreground': {'pid': fg}, 'status': {'state': state}})}' ;;\n"
                  "  read) echo '❯ ' ;;\n"
                  "esac\n")
     os.chmod(p, 0o755)
@@ -385,6 +455,173 @@ def test_up_down():
     b.done()
 
 
+FAKE_HC2 = r'''#!/usr/bin/env python3
+# a stateful hc: one prompt box, a scripted state, a log of every call
+import json, os, signal, sys
+ST = os.path.join(os.path.dirname(os.path.realpath(__file__)), "hc-state.json")
+st = json.load(open(ST))
+a = sys.argv[1:]
+with open(st["log"], "a") as fh:
+    fh.write(" ".join(a) + "\n")
+def save():
+    json.dump(st, open(ST, "w"))
+def kill():
+    try:
+        os.kill(st["claude_pid"], signal.SIGTERM)
+    except OSError:
+        pass
+if a[0] == "ls":
+    print(json.dumps({"terminals": [{"name": n} for n in st["terminals"]]}))
+elif a[0] == "get":
+    t = st["terminals"].get(a[1], {})
+    print(json.dumps({"pid": t.get("pid"), "foreground": {"pid": t.get("fg")}, "status": {"state": st["state"]}}))
+elif a[0] == "read":
+    print("\n".join(st.get("screen", []) + ["", "\u276f " + st["box"], ""]))
+elif a[0] == "keys":
+    for k in a[2:]:
+        if k == "backspace":
+            st["box"] = st["box"][:-1]
+        elif k == "esc":
+            if st.get("screen"):
+                st["screen"] = []
+                kill()
+        elif k == "enter":
+            cmd, st["box"] = st["box"], ""
+            if st.get("screen"):
+                st["entered_on_dialog"] = True
+            elif cmd == "/handoff":
+                if st.get("handoff") == "blocked":
+                    st["state"] = "blocked"
+                    st["screen"] = ["Do you want to proceed?", "  \u276f 1. Yes", "    2. No"]
+                else:
+                    open(st["brief"], "w").write("the new brief\n")
+            elif cmd == "/exit":
+                if st.get("feedback"):
+                    st["screen"] = ["You have 1 unsent feedback draft \u00b7 Enter to review & send \u00b7 Esc to discard and exit"]
+                else:
+                    kill()
+        elif st.get("drop") == k:
+            st["drop"] = None
+        else:
+            st["box"] += k
+    save()
+'''
+
+
+def stateful_hc(b, terminals, claude_pid, **st):
+    p = os.path.join(b.home, "fake-hc2")
+    with open(p, "w") as fh:
+        fh.write(FAKE_HC2)
+    os.chmod(p, 0o755)
+    state = dict({"log": os.path.join(b.home, "hc2.log"), "terminals": terminals, "box": "", "state": "idle",
+                  "claude_pid": claude_pid, "brief": os.path.join(b.repos["web"], "HANDOFF.md")}, **st)
+    with open(os.path.join(b.home, "hc-state.json"), "w") as fh:
+        json.dump(state, fh)
+    if os.path.exists(state["log"]):
+        os.remove(state["log"])
+    b.herdr = p
+    b.write_config()
+    return p
+
+
+def hc_state(b):
+    with open(os.path.join(b.home, "hc-state.json")) as fh:
+        return json.load(fh)
+
+
+def hc_log(b):
+    try:
+        with open(os.path.join(b.home, "hc2.log")) as fh:
+            return [l.split() for l in fh.read().splitlines()]
+    except FileNotFoundError:
+        return []
+
+
+def orphan():
+    """A process this test doesn't parent, so a kill leaves no zombie that still answers kill(0)."""
+    out = subprocess.run(["sh", "-c", "sleep 300 >/dev/null 2>&1 & echo $!"], capture_output=True, text=True)
+    return int(out.stdout.strip())
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def test_launch_quoting():
+    print("cli: launch lines are shell-quoted; a bad template is named")
+    b = Box()
+    spaced = os.path.join(b.home, "dev", "my shop")
+    os.makedirs(spaced)
+    b.write_config({"agents": [{"name": "shop", "repo": spaced}]})
+    r = b.run("up", "shop")
+    check("a repo path with a space is quoted in the cd and in {repo}",
+          r.returncode == 0 and f"cd '{spaced}' && claude" in r.stdout)
+    b.write_config({"agents": [{"name": "shop", "repo": spaced, "launch": "claude --add-dir {repo} --name {name}"}]})
+    r = b.run("up", "shop")
+    check("…and in the template's {repo}", f"--add-dir '{spaced}' --name shop" in r.stdout)
+    b.write_config({"launch": "claude --settings '{\"x\": 1}' --model {model}"})
+    r = b.run("up", "web")
+    check("literal braces in the template: a clear error, no traceback",
+          r.returncode != 0 and "Traceback" not in r.stderr and "{{" in r.stderr)
+    b.write_config({"launch": "claude --model {modle}"})
+    r = b.run("up", "web")
+    check("an unknown field in the template is named, no traceback",
+          r.returncode != 0 and "Traceback" not in r.stderr and "modle" in r.stderr)
+    b.done()
+
+
+def test_down_driver():
+    print("cli: down against a stateful fake hc")
+    b = Box()
+    # finding: down waits on the session in the agent's terminal, not the newest one in the repo
+    term_pid = orphan()
+    b.session_file(term_pid, sessionId="w-term", name="web-term", cwd=b.repos["web"], startedAt=1)
+    b.session_file(os.getpid(), sessionId="w-hand", name="web-by-hand", cwd=b.repos["web"], startedAt=2)
+    stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid)
+    r = b.run("down", "web", "--dry")
+    check("two live sessions in the repo: down picks the one in the agent's terminal",
+          r.returncode == 0 and "w-term" in r.stdout and "w-hand" not in r.stdout)
+    stateful_hc(b, {"web": {"pid": 1, "fg": 999999}}, term_pid)
+    r = b.run("down", "web", "--dry")
+    check("no session runs in the agent's terminal: down refuses", r.returncode != 0 and "terminal" in r.stderr)
+    os.remove(os.path.join(b.sessions, f"{os.getpid()}.json"))
+
+    # a garbled /handoff is cleared from the box
+    stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, drop="f")
+    r = b.run("down", "web")
+    st = hc_state(b)
+    check("a command that didn't type cleanly: down stops", r.returncode != 0)
+    check("…and the box is empty again, so the next Enter runs nothing", st["box"] == "")
+    check("…and no Enter was pressed", not any(l[:1] == ["keys"] and "enter" in l for l in hc_log(b)))
+
+    # a dialog during /handoff is never answered
+    stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, handoff="blocked")
+    r = b.run("down", "web")
+    enters = [l for l in hc_log(b) if l[:1] == ["keys"] and "enter" in l]
+    check("a dialog during /handoff: down stops and says so",
+          r.returncode != 0 and "dialog" in r.stderr and "Traceback" not in r.stderr)
+    check("…without pressing Enter on it", len(enters) == 1 and not hc_state(b).get("entered_on_dialog"))
+    check("…and the session stays", alive(term_pid))
+
+    # the unsent-feedback dialog after /exit gets Esc, and only Esc
+    stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, feedback=True)
+    r = b.run("down", "web")
+    log = hc_log(b)
+    keys = [k for l in log if l[:1] == ["keys"] for k in l[2:]]
+    check("the unsent-feedback dialog: down presses Esc and finishes",
+          r.returncode == 0 and keys.count("esc") == 1 and not hc_state(b).get("entered_on_dialog"))
+    check("…says the draft was discarded", "feedback" in r.stdout)
+    check("…and the session is gone, its terminal killed and removed",
+          not alive(term_pid) and ["kill", "web"] in log and ["rm", "web"] in log)
+    if alive(term_pid):
+        os.kill(term_pid, 9)
+    b.done()
+
+
 def test_dispatch():
     print("cli: organism fleet")
     b = Box()
@@ -400,7 +637,8 @@ def test_dispatch():
     b.done()
 
 
-for t in (test_no_roster, test_lifecycle, test_messages, test_list_and_ledger, test_up_down, test_dispatch):
+for t in (test_no_roster, test_lifecycle, test_messages, test_list_and_ledger, test_up_down, test_launch_quoting,
+          test_down_driver, test_dispatch):
     t()
 
 if _fails:
