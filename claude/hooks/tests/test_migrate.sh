@@ -40,7 +40,7 @@ for groups in (s.get("hooks") or {}).values():
     for g in groups:
         for h in g.get("hooks", []):
             line = " ".join([h.get("command", "")] + h.get("args", []))
-            if re.search(r"claude/hooks/(guard-publish\.sh|inject-handoff\.sh|obsidian-mirror\.py|session-end-handoff\.py)", line):
+            if re.search(r"claude/hooks/(guard-publish\.sh|inject-handoff\.sh|obsidian-mirror\.py|session-end-handoff\.py|fleet\.py)", line):
                 print(line)' "$1"; }
 tree_hash() {  # tree_hash DIR: every file and link with its size, mtime and target (dirs left out)
   python3 - "$1" <<'PY'
@@ -86,7 +86,7 @@ run bash "$R/deploy.sh" >/dev/null 2>&1
 cp "$H/.claude/settings.json" "$TMP/start.json"
 cp "$H/.claude/state/reconcile-pairings.json" "$TMP/pairings-start.json"
 old_cmds=$(harness_value probe commands); old_keys=$(harness_value probe settings_hooks)
-t "the symlink install runs Organism's hooks from settings.json" '[ "$(organism_cmds "$H/.claude/settings.json" | wc -l | tr -d " ")" = 6 ]'
+t "the symlink install runs Organism's hooks from settings.json" '[ "$(organism_cmds "$H/.claude/settings.json" | wc -l | tr -d " ")" = 9 ]'
 
 echo "migrate: dry run and preflight"
 mkdir -p "$H/.fake-claude"; h0=$(tree_hash "$H")
@@ -94,7 +94,7 @@ out=$(migrate --to-plugin --dry-run --skip-tests 2>&1); rc=$?
 t "dry run exits 0" '[ $rc -eq 0 ]'
 t "dry run changes nothing in HOME" '[ "$(tree_hash "$H")" = "$h0" ]'
 t "dry run shows the pairings diff" 'printf "%s" "$out" | grep -q "plugin mode"'
-t "dry run says what deploy would drop" 'printf "%s" "$out" | grep -q "drop 6 Organism hook entries"'
+t "dry run says what deploy would drop" 'printf "%s" "$out" | grep -q "drop 9 Organism hook entries"'
 out=$(FAKE_PS="4242 /usr/local/bin/claude --resume" migrate --to-plugin --skip-tests 2>&1); rc=$?
 t "refuses while an interactive claude runs" '[ $rc -ne 0 ] && printf "%s" "$out" | grep -q "interactive claude sessions"'
 t "...before snapshotting anything" '[ -z "$(ls -d "$H"/.claude/state/pre-plugin-* 2>/dev/null)" ]'
@@ -121,7 +121,7 @@ out=$(ORGANISM_MIGRATE_STOP_AFTER=4 migrate --to-plugin --yes 2>&1); rc=$?
 t "stops after step 4" '[ $rc -eq 0 ] && printf "%s" "$out" | grep -q "stopped after step 4"'
 t "the plugin was installed from the clone" 'grep -q "plugin marketplace add $R" "$H/.fake-claude/calls.log" && grep -q "plugin install organism@organism" "$H/.fake-claude/calls.log"'
 t "the overlay pins the plugin" 'python3 -c "import json,sys;o=json.load(open(sys.argv[1]));sys.exit(0 if o[\"enabledPlugins\"][\"organism@organism\"] is True and o[\"extraKnownMarketplaces\"][\"organism\"][\"source\"][\"path\"] else 1)" "$H/.claude/state/settings.local.json"'
-t "the settings hooks are still on (plugin first, settings off later)" '[ "$(organism_cmds "$H/.claude/settings.json" | wc -l | tr -d " ")" = 6 ]'
+t "the settings hooks are still on (plugin first, settings off later)" '[ "$(organism_cmds "$H/.claude/settings.json" | wc -l | tr -d " ")" = 9 ]'
 t "the pairings were rewritten, with a backup" '[ -f "$H/.claude/state/reconcile-pairings.json.pre-plugin.bak" ] && grep -q "hooks.json" "$H/.claude/state/reconcile-pairings.json"'
 out=$(migrate --to-plugin 2>&1); rc=$?
 t "the rest runs to the end" '[ $rc -eq 0 ] && printf "%s" "$out" | grep -q "done. Start new"'
