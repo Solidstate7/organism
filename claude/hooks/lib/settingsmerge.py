@@ -44,7 +44,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.r
 PLUGIN_ID = "organism@organism"
 MARKETPLACE = "organism"
 OURS = re.compile(r"claude/hooks/(guard-publish\.sh|inject-handoff\.sh|obsidian-mirror\.py"
-                  r"|session-end-handoff\.py)(?![\w.-])")
+                  r"|session-end-handoff\.py|fleet\.py)(?![\w.-])")
 
 
 def _load(path):

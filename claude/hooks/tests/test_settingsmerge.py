@@ -75,7 +75,8 @@ def commands(settings_obj):
 
 
 def organism_commands(settings_obj):
-    names = ("guard-publish.sh", "inject-handoff.sh", "obsidian-mirror.py", "session-end-handoff.py")
+    names = ("guard-publish.sh", "inject-handoff.sh", "obsidian-mirror.py", "session-end-handoff.py",
+             "fleet.py")
     return [c for c in commands(settings_obj) if any("claude/hooks/" + n in c for n in names)]
 
 
@@ -308,6 +309,19 @@ run(h, {}, "legacy", "--root", "/r")                   # e.g. a later deploy of 
 check("a later deploy does not resurrect the plugin",
       "organism@organism" not in settings(h).get("enabledPlugins", {})
       and "organism" not in settings(h).get("extraKnownMarketplaces", {}))
+
+print("settingsmerge: eject after a legacy install leaves no fleet hook behind")
+h = home()
+run(h, {}, "legacy", "--root", "/r")
+live = settings(h)
+check("the legacy install wrote the fleet hook", any("/r/claude/hooks/fleet.py" in c for c in commands(live)))
+live["hooks"]["SessionStart"].append(OTHER_STOP)       # the user's own hook, next to the fleet's
+write_settings(h, json.dumps(live))
+run(h, {}, "eject")
+s = settings(h)
+check("eject: no fleet hook is left", not any("fleet.py" in c for c in commands(s)))
+check("eject: no Organism hook at all", organism_commands(s) == [])
+check("eject: the user's hook stays", "other-tool stop" in commands(s))
 
 print("settingsmerge: a bad mode leaves settings.json untouched")
 h = home()
