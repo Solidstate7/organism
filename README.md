@@ -8,13 +8,17 @@ Organism is a [Claude Code](https://claude.com/claude-code) plugin that keeps th
 behind the code that your agent writes. It does three things:
 
 1. It saves every session to your notes folder as readable markdown, as it happens.
-2. At the end of a session, `/harvest` writes each decision as a dated record in the repo.
-   It links each record to the commits that carry it out.
+2. At the end of a session, a harvest writes each decision as a dated record in the
+   repo. It links each record to the commits that carry it out.
 3. The next session starts with a short "where we are" brief, loaded automatically.
 
-`organism orchestrate` is for running several sessions at once, one per repo. It starts
-each session, stops it after `/harvest`, and logs both. See
+Organism can also run several sessions at once, one per repo. It starts each session,
+stops it after a harvest, and logs both. See
 [Running several sessions](#running-several-sessions).
+
+You don't type Organism's commands. You say what you want in a session, and Claude runs
+the command. The commands are listed in [docs/COMMANDS.md](docs/COMMANDS.md), for the
+agent that runs them.
 
 Organism is plain files, a few hooks and a few scripts. No server, no database, no vector
 store: everything opens in a text editor and lives in git or in your own folder.
@@ -26,28 +30,20 @@ claude plugin marketplace add Solidstate7/organism
 claude plugin install organism@organism
 ```
 
-Inside a session, `/plugin marketplace add Solidstate7/organism` and
-`/plugin install organism@organism` do the same. Then start a new session and run
-`/organism-setup`. It shows what it found (your vault and your repos) and writes nothing
-until you say yes.
+These two lines are the only commands that you type yourself. Then start a new session
+and ask Claude to set up Organism. It shows what it found (your vault and your repos) and
+writes nothing until you say yes.
 
 A vault is any folder of markdown, and Obsidian is optional. Setup looks for one in
 `~/Projects`, `~/Documents`, Obsidian's iCloud folder and your home folder. If yours is
-somewhere else, tell it the path. Until a vault is set, session notes stay off. `/harvest`
+somewhere else, tell it the path. Until a vault is set, session notes stay off. A harvest
 works from the start in any git repo, and anywhere inside the vault once one is set.
 
-After that, the only habit is running `/harvest` at the end of a session that made a
-decision. The hooks do the rest.
+After that, the only habit is asking for a harvest at the end of a session. The hooks do
+the rest.
 
-To update, run these two commands and restart Claude Code. A session that is already
-open keeps the old version.
-
-```sh
-claude plugin marketplace update organism
-claude plugin update organism@organism
-```
-
-To remove Organism, use `/plugin`.
+To update or remove Organism, ask Claude to do it, and restart Claude Code afterwards. A
+session that is already open keeps the old version.
 
 ## Why
 
@@ -74,18 +70,18 @@ code and get back to the sentence in which you asked for it.
 
 | What gets lost | What Organism keeps |
 |---|---|
-| Why the code exists | A dated decision record for each decision, linked both ways to its commits. See [What /harvest does](#what-harvest-does). |
+| Why the code exists | A dated decision record for each decision, linked both ways to its commits. See [What a harvest does](#what-a-harvest-does). |
 | What was said while building it | Every session, saved to your vault as notes you own. See [Session notes](#session-notes). |
 
-![The loop: a session feeds session notes after every reply. /harvest writes the "where we are" note and the decision records, and the next session loads the note when it starts. Records link both ways to commits. Reconcile, an optional and experimental check, reads the commits, rewrites the half of the doc page that the machine owns, and warns you on a mismatch.](docs/img/loop.svg)
+![The loop: a session feeds session notes after every reply. A harvest writes the "where we are" note and the decision records, and the next session loads the note when it starts. Records link both ways to commits. Reconcile, an optional and experimental check, reads the commits, rewrites the half of the doc page that the machine owns, and warns you on a mismatch.](docs/img/loop.svg)
 
-## What /harvest does
+## What a harvest does
 
-You run it once, at the end of a session that made a decision. It commits the work and
-writes each decision as a record. Then it links the records to the commits that carry
+You ask for it once, at the end of a session: "harvest this session" is enough. It
+commits the work and writes each decision that the session made as a record. Then it links the records to the commits that carry
 them out, and rewrites the brief for the next session.
 
-![The eight steps of /harvest in four jobs. Settle the code: read the repo, commit the work first. Record the reasons: find the decisions, write the records, show the draft, commit the records. Link records to commits. Hand over: rewrite the brief. Each step carries the problem it prevents.](docs/img/handoff.svg)
+![The eight steps of a harvest in four jobs. Settle the code: read the repo, commit the work first. Record the reasons: find the decisions, write the records, show the draft, commit the records. Link records to commits. Hand over: rewrite the brief. Each step carries the problem it prevents.](docs/img/handoff.svg)
 
 The diagram shows one run, top to bottom, in four jobs. Under each step is the problem
 that it prevents. Amber marks the only two places where it may ask you something. Green
@@ -105,11 +101,11 @@ A record is never renumbered, rewritten or deleted. A wrong one is superseded by
 record, and both stay on file. The commits that carry out a decision land before the
 record that explains it, so the history reads as cause, then effect.
 
-Only `/harvest` writes the brief. If you skip a run, the next session still gets the
+Only a harvest writes the brief. If you skip one, the next session still gets the
 brief as you left it. It also gets links to the saved notes of the sessions that ran
 after it.
 
-The brief states facts about the repo, so `/harvest` checks them. Before writing, it
+The brief states facts about the repo, so the harvest checks them. Before writing, it
 reads the branch, the recent commits and what has been pushed. After writing, it checks
 the new brief against them. A commit the brief names but the repo doesn't have, or a
 commit called pushed that isn't, is reported to you. So is an open item the old brief
@@ -120,39 +116,26 @@ had and the new one dropped.
 - It writes only the records, the index, the brief and `.gitignore`. In a vault it also
   writes a page that lists every record. After a rebuild of old history, it writes a
   marker file in the records folder. It never edits code.
-- It commits on the current branch and never pushes unless you ask for a push in your
-  note. Inside a vault but outside a git repository it writes the records and the brief at
+- It commits on the current branch and never pushes unless you ask for a push. Inside a vault but outside a git repository it writes the records and the brief at
   the vault root and skips the git steps. Outside both it writes nothing and says so.
 - It records only this project's decisions. A decision about another project is named in
-  the draft and left for that project's own run.
+  the draft and left for that project's own harvest.
 - Records describe situations, never account numbers, addresses or names. If the work
-  contains a secret, the run stops.
+  contains a secret, the harvest stops.
 - It asks at most two questions: whether to rebuild old history, and whether to
-  gitignore generated data. It never asks for approval, because running the command is
+  gitignore generated data. It never asks for approval, because asking for the harvest is
   the approval.
 - A session with no decision produces only the brief.
 
-### Running it
+### What you can add
 
-| Form | What it does |
-|---|---|
-| `/harvest` | The normal run, at the end of a session. |
-| `/harvest <note>` | The same run, with your note steering the brief. Any text after the command is the note. |
-| `/harvest --retro` | Rebuild past decisions from the repo's history now, instead of waiting for the offer. Text after the flag narrows it: a subsystem, a date range, a suspected gap. |
+Anything that you say with the request steers the harvest. If you say what comes next,
+the brief opens on it: "harvest, next is the queue consumer and then the load test". If
+you make a choice and give a reason, it becomes a record as well: "harvest, we keep
+SQLite for the job store, because Postgres needs operations work we can't staff".
 
-A note that says what's next shapes the brief, and the next session opens on it:
-
-```
-/harvest next: migrate the queue consumer, then re-run the load test
-```
-
-A note that makes a choice and gives a reason becomes a record as well:
-
-```
-/harvest we keep SQLite for the job store; Postgres adds an ops burden we can't staff
-```
-
-In a repo with history but no records, `/harvest` offers once to rebuild them. Rebuilt
+In a repo with history but no records, the harvest offers once to rebuild them. You can
+also ask for the rebuild yourself, for the whole history or for one part of it. Rebuilt
 records are marked "reconstructed" and name their sources.
 [docs/ADVANCED.md](docs/ADVANCED.md#decision-records-for-old-repos-and-commits-that-explain-themselves)
 says how far to trust them.
@@ -183,9 +166,9 @@ and its first line names the full note in `~/.claude/mirror-archive`.
 Common secrets (API keys, tokens, private keys, passwords in URLs) are redacted before
 anything is written. This is best effort, not a guarantee. A project can opt out with an
 empty `.organism-no-notes` file. When a call in any other session touches a path under
-such a folder, that session's note shows `[excluded]` and no output. `/incognito on` keeps
-a stretch of work out of the notes. `/incognito purge` deletes what the current session
-has saved so far and stops saving until `/incognito off`.
+such a folder, that session's note shows `[excluded]` and no output. Tell Claude to go
+incognito, and the work from then on stays out of the notes until you end it. You can
+also have it delete what the current session has saved so far.
 [docs/SESSION-NOTES.md](docs/SESSION-NOTES.md) shows the format and lists exactly what is
 copied.
 
@@ -195,14 +178,16 @@ Some people run one Claude Code session per repo and send each one orders from a
 session. Organism calls each repo with its session an agent and lists them in a roster,
 a JSON file that you write. Without a roster, none of this runs.
 
-![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](docs/img/orchestrate.svg)
+![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs a harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](docs/img/orchestrate.svg)
 
-| Command | What it does |
+You ask the main session for four things:
+
+| You ask to | What happens |
 |---|---|
-| `organism orchestrate roster` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
-| `organism orchestrate summon <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
-| `organism orchestrate unsummon <name>` | Runs `/harvest` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
-| `organism orchestrate ledger` | Shows the log: when each session started and stopped, and the first line of each order and report. |
+| see the roster | It shows each agent: running, stopped after a harvest, stopped without one, or never started. It also shows how many sessions the agent has had. |
+| start an agent | A new session starts in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
+| stop an agent | The agent's session runs a harvest. Once the brief is rewritten, the session ends. |
+| see the log | It shows when each session started and stopped, and the first line of each order and report. |
 
 A long session fills its context and gets slower and less careful. A new session that
 starts from a short brief has a clean context and still knows where the work stands.
@@ -210,24 +195,12 @@ starts from a short brief has a clean context and still knows where the work sta
 context.
 
 Hooks write the log, so a session that you start by hand is in it too. To open and
-type into terminals, `summon` and `unsummon` need herdr-core, a terminal manager. Without
-it, `summon` prints the command to run in the repo, and you run `/harvest` and `/exit`
-yourself. If `/harvest` asks for a permission or asks a question, `unsummon` stops and
-leaves the answer to you. Run the commands in your main session, because `organism` is on the path of Claude's
-shell. [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md) explains the roster and every option.
+type into terminals, Organism needs herdr-core, a terminal manager. Without it, starting
+an agent prints what to run in the repo, and you close the session yourself. If the
+harvest asks for a permission or asks a question, the stop waits and leaves the answer
+to you. [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md) explains the roster and every option.
 
-## Commands
-
-| Command | What it does |
-|---|---|
-| `/harvest` | Commit the work, write the decision records, link them to commits, rewrite the brief. Takes `--retro` or a note. |
-| `/incognito` | Control the session notes: `on`, `off`, `toggle`, `purge` or `status` (the default). |
-| `/organism-setup` | Show what setup found and apply it when you say yes. |
-
-`/organism:harvest` and `/organism:incognito` work too, in case another plugin also has a
-`/harvest`.
-
-Until 0.4.0, `/harvest` was called `/handoff`. It does the same work under the new name.
+## What runs on its own
 
 Five hooks run without any input from you:
 
@@ -239,10 +212,6 @@ Five hooks run without any input from you:
 | Publish guard | Before `Bash`, connector, web fetch and web search calls | Blocks a push, deploy, upload or web request that contains a term from your blocked list. |
 | Agent log | Session start and end, and after `SendMessage` | Logs when an agent's session starts and stops, and the first line of each order and report. Does nothing until you write a roster. |
 
-The plugin also puts an `organism` command on the path of Claude's own shell, for
-maintenance. Ask Claude to run `organism help` for the list. `organism doctor` checks the
-install.
-
 ## Requirements
 
 | Needs | For |
@@ -251,7 +220,7 @@ install.
 | git, python3 3.9 or later | Everything else. Standard library only, nothing to install with pip. |
 | macOS or Linux | CI runs the tests on both. Alerts show as notifications on macOS. |
 | node | The publish guard, once its list has terms. With terms and no node, the guard blocks every call that it checks until you install node or empty the list. |
-| herdr-core (optional) | `organism orchestrate summon` and `unsummon`, to open and type into terminals. |
+| herdr-core (optional) | Starting and stopping agents, to open and type into terminals. |
 
 ## Optional extras
 
@@ -274,12 +243,8 @@ Each one has a section in [docs/ADVANCED.md](docs/ADVANCED.md).
 
 ## Tests
 
-```sh
-bash claude/hooks/tests/run-all.sh   # prints ALL PASS or exits nonzero
-```
-
-CI runs the same command on every push, on macOS and Linux. [CONTRIBUTING.md](CONTRIBUTING.md)
-covers working from a clone.
+CI runs the tests on every push, on macOS and Linux. [CONTRIBUTING.md](CONTRIBUTING.md)
+covers running them and working from a clone.
 
 ## License
 

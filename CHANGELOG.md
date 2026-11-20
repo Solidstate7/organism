@@ -20,6 +20,11 @@ All notable changes to Organism are listed here. The format follows
 - These names stay as they were: the roster `~/.claude/state/organism-fleet.json`, the
   log `~/.claude/state/fleet-ledger.jsonl`, the `ORGANISM_FLEET_*` variables, and the
   events in the log.
+- The README no longer lists commands. It says what to ask Claude for, and the commands
+  are in [docs/COMMANDS.md](docs/COMMANDS.md) for the agent that runs them. The two
+  install lines stay.
+- The README says to ask for a harvest at the end of every session, not only after a
+  session that made a decision.
 - A table written by `ledger --md` has a new first line and the heading "Ledger". A table
   with the old first line is still replaced without `--force`.
 
