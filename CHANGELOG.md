@@ -4,6 +4,18 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-20
+
+### Changed
+
+- `/handoff` is now `/harvest`, and `/organism:handoff` is now `/organism:harvest`. The
+  command does the same work as before. The old name is gone, so type the new one at the
+  end of a session.
+- `organism fleet down` types `/harvest` into the agent's session. A roster that sets
+  `handoff_command` keeps its own value.
+- These names stay as they were: the brief `HANDOFF.md`, `organism handoff-state`, the
+  roster field `"handoff": false`, and the `--no-handoff` flag.
+
 ## [0.3.0] - 2026-11-20
 
 The first release since 0.1.2. It also brings the changes listed under 0.2.0, which was
