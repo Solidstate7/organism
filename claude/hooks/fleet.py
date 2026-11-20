@@ -2,13 +2,14 @@
 """organism orchestrate: run a set of Claude Code sessions, one per repo, and keep a history of their lives.
 
   organism orchestrate roster                      every agent: lifecycle state, generations, brief date
-  organism orchestrate summon <name> [--effort E] [--dry]
+  organism orchestrate summon <name> [--effort E] [--dry] [--force]
                                                    start a fresh session in the agent's repo
                                                    (from its brief when it has lived before)
   organism orchestrate unsummon <name> [--no-handoff] [--dry]
                                                    /harvest writes the brief, then /exit
   organism orchestrate history [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
                                                    the history: every summon, order, report and harvest
+  organism orchestrate tend [--dry]                close idle agents when the machine is short of memory
 
 `organism fleet`, `list`, `up` and `down` are the old names of `orchestrate`, `roster`,
 `summon` and `unsummon`. They still work.
@@ -30,6 +31,16 @@ by hand:
                 session, else close (and why)
   PostToolUse   on SendMessage: order (to an agent), report (from an agent), message
                 (agent to agent). Only the first line is kept, after secret redaction.
+
+Room. Before `summon` starts a session it checks that the machine has room for one more:
+the memory that is available must cover one session (`session_mb`, 400) and a reserve
+(`min_free_mb`, 15% of the machine's memory), and the number of live agents must stay within
+`max_live` when the roster sets it. When there is no room, it closes the agent that has been
+idle longest, with a harvest, and checks again. It never closes an agent that is working. With
+no idle agent to close it starts nothing (`--force` starts the session anyway). `tend` does the
+same check without starting anything and closes only agents idle for `idle_minutes` (10) or
+more. The SessionStart hook starts `tend` in the background when the machine is short.
+`"auto": false` in the roster turns all of this off.
 
 `summon` and `unsummon` drive the terminal through herdr-core (`hc`). Without it, `summon`
 prints the command to run and `unsummon` refuses (run /harvest and /exit in the session
@@ -63,6 +74,7 @@ MD_MARKS_OLD = ("<!-- written by organism orchestrate ledger; rewritten on each 
                 "<!-- written by organism fleet ledger; rewritten on each run -->")
 NAME_RE = r"[A-Za-z0-9][A-Za-z0-9._-]*"
 STR_FIELDS = ("repo", "brief", "model", "effort", "launch", "role")
+INT_FIELDS = {"max_live": 1, "min_free_mb": 0, "session_mb": 1, "idle_minutes": 0}   # name: smallest value
 
 
 def _tick():
@@ -102,6 +114,11 @@ def load_config(strict=True):
         for k in ("herdr", "launch", "shell", "handoff_command"):
             if k in raw and not isinstance(raw[k], str):
                 raise ValueError(f"\"{k}\" is a string")
+        for k, low in INT_FIELDS.items():
+            if k in raw and (isinstance(raw[k], bool) or not isinstance(raw[k], int) or raw[k] < low):
+                raise ValueError(f"\"{k}\" is a whole number, {low} or more")
+        if "auto" in raw and not isinstance(raw["auto"], bool):
+            raise ValueError("\"auto\" is true or false")
         agents = {}
         for a in raw.get("agents", []):
             if not isinstance(a, dict):
@@ -419,6 +436,8 @@ def cmd_hook():
             fn(cfg, p)
         finally:
             os.close(fd)
+        if fn is on_session_start:
+            maybe_tend(cfg, p)
     except BaseException as ex:   # the ledger is a record, not a gate
         print(f"organism orchestrate hook: {type(ex).__name__}: {ex}", file=sys.stderr)
     return 0
@@ -542,6 +561,162 @@ def terminal_session(cfg, name, hd):
     return hit
 
 
+# ---- room: memory and the number of live agents ------------------------------------------
+def memory():
+    """(total MB, available MB) of this machine, or None when it can't be read.
+    macOS: the kernel's own share of memory still available (what `memory_pressure` prints).
+    Linux: MemAvailable. Tests set ORGANISM_FLEET_MEM to "total,available"."""
+    v = os.environ.get("ORGANISM_FLEET_MEM")
+    try:
+        if v:
+            total, avail = (int(x) for x in v.split(","))
+            return total, avail
+        if sys.platform == "darwin":
+            r = subprocess.run(["/usr/sbin/sysctl", "-n", "hw.memsize", "kern.memorystatus_level"],
+                               capture_output=True, text=True, timeout=5)
+            total, level = (int(x) for x in r.stdout.split())
+            return total >> 20, (total >> 20) * level // 100
+        with open("/proc/meminfo", encoding="utf-8") as fh:
+            kb = {l.split(":")[0]: int(l.split()[1]) for l in fh if ":" in l}
+        return kb["MemTotal"] >> 10, kb["MemAvailable"] >> 10
+    except (OSError, ValueError, KeyError, IndexError, subprocess.SubprocessError):
+        return None
+
+
+def limits(cfg, mem=None):
+    total = mem[0] if mem else 0
+    return {"cap": cfg.get("max_live"), "reserve": cfg.get("min_free_mb", max(512, total * 15 // 100)),
+            "session": cfg.get("session_mb", 400), "idle": cfg.get("idle_minutes", 10)}
+
+
+def shortage(cfg, new=0):
+    """None when the machine has room for `new` more sessions. Else (why, how many agents to close)."""
+    live = [n for n in cfg["agents"] if live_session(cfg, n)]
+    mem = memory()
+    lim = limits(cfg, mem)
+    if lim["cap"] is not None and len(live) + new > lim["cap"]:
+        return (f"{len(live)} agent{'s are' if len(live) != 1 else ' is'} live and max_live is {lim['cap']}",
+                len(live) + new - lim["cap"])
+    if mem:
+        need = lim["reserve"] + new * lim["session"]
+        if mem[1] < need:
+            return (f"{mem[1]} MB of memory is available and {need} MB is needed",
+                    -(-(need - mem[1]) // lim["session"]))
+    return None
+
+
+def closable(cfg, hd, skip=(), min_idle=0):
+    """Agents that can be closed now, longest idle first: [(name, idle minutes)]. An agent
+    counts when its session runs in a terminal that summon opened and is not at work."""
+    terms, evs, me = hd.terminals(), events(), own_session().get("sessionId")
+    out = []
+    for n in cfg["agents"]:
+        if n in skip or n not in terms:
+            continue
+        s = terminal_session(cfg, n, hd)
+        if not s or s.get("status", "idle") != "idle" or (me and s.get("sessionId") == me):
+            continue
+        if hd.state(n) in ("working", "blocked"):
+            continue
+        since = s.get("statusUpdatedAt")
+        if not isinstance(since, (int, float)):      # an older Claude Code: the agent's last event
+            last = next((e for e in reversed(evs) if n in (e.get("agent"), e.get("from"), e.get("to"))), None)
+            try:
+                since = datetime.datetime.fromisoformat(last["ts"]).timestamp() * 1000
+            except (TypeError, KeyError, ValueError):
+                since = s.get("startedAt") or 0
+        idle = max(0, int((time.time() * 1000 - since) // 60000))
+        if idle >= min_idle:
+            out.append((n, idle))
+    return sorted(out, key=lambda x: -x[1])
+
+
+def make_room(cfg, hd, new=0, skip=(), min_idle=0, dry=False):
+    """Close idle agents, longest idle first, until there is room for `new` more sessions.
+    (None, closed) when there is room now. (why, closed) when there still isn't.
+    It closes no more agents than the shortage calls for: memory that something else holds
+    does not come back by closing agents."""
+    short = shortage(cfg, new)
+    if not short:
+        return None, []
+    why, k = short
+    skip, closed = set(skip), []
+    while len(closed) < k:
+        cands = closable(cfg, hd, skip, min_idle)
+        if not cands:
+            break
+        n, idle = cands[0]
+        skip.add(n)
+        if dry:
+            print(f"would close {n} first (idle {idle} min): {why}")
+            closed.append(n)
+            continue
+        print(f"closing {n} (idle {idle} min): {why}", flush=True)
+        try:
+            cmd_down(cfg, n)
+        except SystemExit as ex:
+            print(f"{n} stays open: {ex}", flush=True)
+            continue
+        append({"event": "autoclose", "agent": n, "why": why, "idle_minutes": idle})
+        closed.append(n)
+    if dry:
+        return (None if len(closed) >= k else why), closed
+    if closed:
+        time.sleep(3 * TICK)                         # let the freed memory show
+    left = shortage(cfg, new)
+    return (left[0] if left else None), closed
+
+
+def cmd_tend(cfg, dry=False):
+    """One pass: when the machine is short, close agents that have been idle long enough."""
+    if cfg.get("auto") is False:
+        print("organism orchestrate: \"auto\" is false in the roster; nothing is closed")
+        return 0
+    hd = herdr(cfg)
+    if hd is None:
+        print("organism orchestrate tend needs herdr-core (hc) to close a session")
+        return 0
+    lock = os.path.join(os.path.dirname(ledger_path()), "orchestrate-tend.lock")
+    os.makedirs(os.path.dirname(lock), exist_ok=True)
+    fd = os.open(lock, os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print("organism orchestrate: another tend is running")
+            return 0
+        short = shortage(cfg)
+        if not short:
+            print("organism orchestrate: there is room; nothing to close")
+            return 0
+        idle = limits(cfg)["idle"]
+        left, closed = make_room(cfg, hd, 0, (), idle, dry)
+        if not closed:
+            print(f"organism orchestrate: {short[0]}, and no agent has been idle for {idle} minutes; "
+                  "nothing was closed")
+        elif left and not dry:
+            print(f"organism orchestrate: closed {', '.join(closed)}; still short: {left}")
+        return 0
+    finally:
+        os.close(fd)
+
+
+def maybe_tend(cfg, p):
+    """From the SessionStart hook: start `tend` in the background when the machine is short."""
+    if cfg.get("auto") is False or (os.environ.get("CLAUDE_CODE_ENTRYPOINT") or "cli") != "cli":
+        return
+    if p.get("source", "startup") not in ("startup", "resume") or not shortage(cfg) or herdr(cfg) is None:
+        return
+    log = os.path.join(os.path.dirname(ledger_path()), "orchestrate-tend.log")
+    fd = os.open(log, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    try:
+        os.write(fd, f"{now()} tend, started by a session start\n".encode())
+        subprocess.Popen([sys.executable, os.path.realpath(__file__), "tend"], stdin=subprocess.DEVNULL,
+                         stdout=fd, stderr=fd, start_new_session=True)
+    finally:
+        os.close(fd)
+
+
 # ---- commands ----------------------------------------------------------------------------
 def short(ts):
     return (ts or "")[5:16].replace("T", " ")
@@ -581,7 +756,7 @@ def cmd_list(cfg):
         print(f"{r[0]:{w[0]}}  {r[1]:{w[1]}}  {r[2]:>{w[2]}}  {r[3]:{w[3]}}  {r[4]}")
 
 
-def cmd_up(cfg, name, effort=None, dry=False):
+def cmd_up(cfg, name, effort=None, dry=False, force=False):
     a = cfg["agents"].get(name) or sys.exit(f"organism orchestrate: no agent {name} in the roster (see orchestrate roster)")
     a["name"] = name
     st, s, last = lifecycle(cfg, name)
@@ -594,14 +769,20 @@ def cmd_up(cfg, name, effort=None, dry=False):
             + (f"the brief of {short(b['mtime'])}" if b else "no brief"))
     line = launch_line(cfg, a, effort)
     hd = herdr(cfg)
-    if hd is None or dry:
+    if hd is None:
         print(plan)
-        print(("herdr-core (hc) is not installed; start it yourself:" if hd is None else "would run:")
-              + f"\n  cd {shlex.quote(a['repo'])} && {line}")
-        if hd is None:
-            print("The history records the start when the session opens.")
+        print(f"herdr-core (hc) is not installed; start it yourself:\n  cd {shlex.quote(a['repo'])} && {line}")
+        print("The history records the start when the session opens.")
         return 0
     print(plan)
+    if cfg.get("auto") is not False and not force:
+        left, _ = make_room(cfg, hd, 1, {name}, 0, dry)
+        if left:
+            sys.exit(f"no room to start {name}: {left}. No idle agent is left to close. "
+                     "Wait for a report, or add --force to start it anyway.")
+    if dry:
+        print(f"would run:\n  cd {shlex.quote(a['repo'])} && {line}")
+        return 0
     shell = cfg.get("shell") or os.environ.get("SHELL") or "/bin/sh"
     if name in hd.terminals(all_=True):
         hd.sh("rm", name)
@@ -726,6 +907,8 @@ def describe(e):
     if k == "harvest":
         b = e.get("brief") or {}
         return f"session {str(e.get('session'))[:8]}, brief written {short(b.get('mtime'))} ({b.get('sha256')})"
+    if k == "autoclose":
+        return f"closed to make room after {e.get('idle_minutes', '?')} idle minutes: {e.get('why', '')}"
     if k == "close":
         return f"session {str(e.get('session'))[:8]}, no harvest: {e.get('why', '')}"
     return f"{e.get('from')} → {e.get('to')}: {e.get('line', '')}"
@@ -795,7 +978,9 @@ def main(a):
         cmd_list(cfg)
         return 0
     if a[0] in ("summon", "resummon", "up") and len(a) > 1:
-        return cmd_up(cfg, a[1], opt("--effort"), flag("--dry"))
+        return cmd_up(cfg, a[1], opt("--effort"), flag("--dry"), flag("--force"))
+    if a[0] == "tend":
+        return cmd_tend(cfg, flag("--dry"))
     if a[0] in ("unsummon", "down", "harvest") and len(a) > 1:
         return cmd_down(cfg, a[1], not flag("--no-handoff"), flag("--dry"))
     print(__doc__.split("\nRun:")[0], file=sys.stderr)

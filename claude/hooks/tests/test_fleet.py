@@ -79,7 +79,8 @@ class Box:
     def env(self, **kw):
         e = {k: v for k, v in os.environ.items() if not k.startswith(("CLAUDE", "ORGANISM_FLEET"))}
         e.update(HOME=self.home, CLAUDE_CODE_ENTRYPOINT="cli", CLAUDE_PID=FAKE_PID,
-                 PATH="/usr/bin:/bin", ORGANISM_FLEET_TICK="0.01")
+                 PATH="/usr/bin:/bin", ORGANISM_FLEET_TICK="0.01",
+                 ORGANISM_FLEET_MEM="16000,8000")      # plenty of memory unless a test says otherwise
         e.update(kw)
         return {k: v for k, v in e.items() if v is not None}
 
@@ -636,6 +637,118 @@ def test_down_driver():
     b.done()
 
 
+def test_room():
+    print("cli: room for a new session, automatic closing, tend")
+    b = Box()
+    old = int(time.time() * 1000) - 45 * 60000
+
+    def web(**st):
+        pid = orphan()
+        b.session_file(pid, sessionId="w-term", name="web-1", cwd=b.repos["web"], status="idle",
+                       statusUpdatedAt=old)
+        stateful_hc(b, {"web": {"pid": 1, "fg": pid}}, pid, **st)
+        return pid
+
+    def ran(what):
+        return any(l[:1] == [what] for l in hc_log(b))
+
+    # the cap: the idle agent is harvested and closed first
+    pid = web()
+    b.write_config({"max_live": 1})
+    r = b.run("summon", "api", "--dry")
+    check("summon --dry over max_live names the agent it would close and closes nothing",
+          r.returncode == 0 and "would close web first (idle 45 min)" in r.stdout and "max_live is 1" in r.stdout
+          and "would run:" in r.stdout and alive(pid) and not ran("keys"))
+    r = b.run("summon", "api")
+    log = hc_log(b)
+    check("summon over max_live closes the idle agent with a harvest",
+          "closing web (idle 45 min)" in r.stdout and not alive(pid) and ["kill", "web"] in log
+          and open(os.path.join(b.repos["web"], "HANDOFF.md")).read() == "the new brief\n")
+    check("…and only then starts the new session",
+          ran("run") and log.index(["kill", "web"]) < next(i for i, l in enumerate(log) if l[:1] == ["run"]))
+    ev = [e for e in b.events() if e.get("event") == "autoclose"]
+    check("…and the history says why it was closed",
+          len(ev) == 1 and ev[0]["agent"] == "web" and ev[0]["idle_minutes"] == 45 and "max_live" in ev[0]["why"])
+    r = b.run("history")
+    check("…in words", "closed to make room after 45 idle minutes" in r.stdout)
+
+    # memory: enough, short, forced, off
+    pid = web()
+    b.write_config()
+    r = b.run("summon", "api", "--dry", ORGANISM_FLEET_MEM="8000,1700")
+    check("enough memory (reserve 1200 + one session 400): nothing is closed",
+          r.returncode == 0 and "close" not in r.stdout and "would run:" in r.stdout)
+    r = b.run("summon", "api", "--dry", ORGANISM_FLEET_MEM="8000,1500")
+    check("short of memory: the idle agent would be closed first",
+          r.returncode == 0 and "would close web first" in r.stdout
+          and "1500 MB of memory is available and 1600 MB is needed" in r.stdout)
+    b.write_config({"min_free_mb": 500, "session_mb": 300})
+    r = b.run("summon", "api", "--dry", ORGANISM_FLEET_MEM="8000,900")
+    check("min_free_mb and session_mb from the roster replace the defaults",
+          r.returncode == 0 and "close" not in r.stdout)
+    b.write_config({"auto": False})
+    r = b.run("summon", "api", "--dry", ORGANISM_FLEET_MEM="8000,100")
+    check("\"auto\": false: summon checks nothing", r.returncode == 0 and "close" not in r.stdout
+          and "would run:" in r.stdout)
+    r = b.run("tend", ORGANISM_FLEET_MEM="8000,100")
+    check("…and tend closes nothing", r.returncode == 0 and "auto" in r.stdout and alive(pid))
+
+    # a working agent is never closed
+    stateful_hc(b, {"web": {"pid": 1, "fg": pid}}, pid, state="working")
+    r = b.run("summon", "api", ORGANISM_FLEET_MEM="8000,1000")
+    check("short of memory and the only agent is working: summon refuses and closes nothing",
+          r.returncode != 0 and "no room to start api" in r.stderr and "--force" in r.stderr
+          and alive(pid) and not ran("keys") and not ran("run"))
+    b.session_file(pid, sessionId="w-term", name="web-1", cwd=b.repos["web"], status="busy", statusUpdatedAt=old)
+    stateful_hc(b, {"web": {"pid": 1, "fg": pid}}, pid)
+    r = b.run("summon", "api", "--dry", ORGANISM_FLEET_MEM="8000,1000")
+    check("a session that says it is busy is not closed either", r.returncode != 0 and "no room" in r.stderr)
+    r = b.run("summon", "api", "--force", ORGANISM_FLEET_MEM="8000,1000")
+    check("--force starts the session anyway", ran("run") and "closing" not in r.stdout and alive(pid))
+
+    # an agent with text in its prompt box stays
+    b.session_file(pid, sessionId="w-term", name="web-1", cwd=b.repos["web"], status="idle", statusUpdatedAt=old)
+    stateful_hc(b, {"web": {"pid": 1, "fg": pid}}, pid, box="half an order")
+    r = b.run("summon", "api", ORGANISM_FLEET_MEM="8000,1000")
+    check("an agent with text in its prompt box stays open, and summon says so",
+          r.returncode != 0 and "web stays open" in r.stdout and alive(pid) and not ran("run")
+          and hc_state(b)["box"] == "half an order")
+
+    # tend
+    stateful_hc(b, {"web": {"pid": 1, "fg": pid}}, pid)
+    r = b.run("tend")
+    check("tend with room closes nothing", r.returncode == 0 and "there is room" in r.stdout and alive(pid))
+    b.write_config({"idle_minutes": 60})
+    r = b.run("tend", ORGANISM_FLEET_MEM="8000,1000")
+    check("tend, short of memory, leaves an agent idle for less than idle_minutes",
+          r.returncode == 0 and "nothing was closed" in r.stdout and "60 minutes" in r.stdout and alive(pid))
+    b.write_config()
+    r = b.run("tend", "--dry", ORGANISM_FLEET_MEM="8000,1000")
+    check("tend --dry names the agent and closes nothing", "would close web first" in r.stdout and alive(pid))
+    n = len(b.events())
+    r = b.start("api", "a-1", ORGANISM_FLEET_MEM="8000,7000")
+    check("a session start with room starts no tend",
+          r.returncode == 0 and not os.path.exists(os.path.join(b.state, "orchestrate-tend.log")))
+    r = b.start("api", "a-2", ORGANISM_FLEET_MEM="8000,1000")
+    t0 = time.time()
+    while alive(pid) and time.time() - t0 < 20:
+        time.sleep(0.1)
+    check("a session start that finds the machine short starts tend in the background",
+          r.returncode == 0 and r.stdout == "" and not alive(pid))
+    t0 = time.time()
+    while not any(e.get("event") == "autoclose" for e in b.events()[n:]) and time.time() - t0 < 20:
+        time.sleep(0.1)
+    check("…which harvests and closes the idle agent, and the history records it",
+          any(e.get("event") == "autoclose" and e.get("agent") == "web" for e in b.events()[n:]))
+    for bad in ({"max_live": 0}, {"session_mb": "400"}, {"auto": "no"}, {"idle_minutes": True}):
+        b.write_config(bad)
+        r = b.run("roster")
+        check(f"a roster with {json.dumps(bad)} is named as wrong", r.returncode != 0 and list(bad)[0] in r.stderr)
+    if alive(pid):
+        os.kill(pid, 9)
+    b.done()
+
+
 def test_dispatch():
     print("cli: organism orchestrate")
     b = Box()
@@ -656,7 +769,7 @@ def test_dispatch():
 
 
 for t in (test_no_roster, test_lifecycle, test_messages, test_list_and_ledger, test_up_down, test_launch_quoting,
-          test_down_driver, test_dispatch):
+          test_down_driver, test_room, test_dispatch):
     t()
 
 if _fails:
