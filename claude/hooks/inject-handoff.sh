@@ -17,6 +17,8 @@
 #     if it sits inside a paired repo with "intent_inject": true, read the paired
 #     wiki page and extract the prose ABOVE the AUTO:BUILT-STATE fence (minus
 #     frontmatter): the user's intent, never the machine's auto-section.
+#   - When the project root's CLAUDE.md has a "## Decisions" index, add one paragraph
+#     that tells the agent to read the record behind code before changing it.
 #   - If any piece exists, emit the SessionStart additionalContext JSON.
 #   - If none is found, print NOTHING and exit 0, a true no-op.
 #
@@ -168,6 +170,34 @@ try:
         parts.append("\n".join(lines))
 except Exception:
     pass  # the pointer is best-effort; never block a session
+
+# A project that keeps decision records: say where the reason behind code is, so the
+# agent reads it before changing that code. One short paragraph, and only when
+# CLAUDE.md at the project root has a "## Decisions" index.
+try:
+    import subprocess
+    droot = os.path.dirname(handoff_path) if handoff_path and os.path.isfile(handoff_path) else ""
+    if not droot:
+        droot = subprocess.run(["git", "-C", start, "rev-parse", "--show-toplevel"],
+                               capture_output=True, text=True, timeout=3).stdout.strip()
+    _home = os.environ.get("HOME") or os.path.expanduser("~")
+    if droot and os.path.realpath(droot) == os.path.realpath(_home):
+        droot = ""   # a home-level CLAUDE.md is not this project's index
+    idx = os.path.join(droot, "CLAUDE.md") if droot else ""
+    if idx and os.path.isfile(idx):
+        with open(idx, encoding="utf-8", errors="replace") as f:
+            has_index = any(ln.strip() == "## Decisions" for ln in f)
+        if has_index:
+            parts.append(
+                "# Decision records\n"
+                "This project records its decisions. `CLAUDE.md` lists them under "
+                "\"Decisions\", one line each. Before you change code that a record "
+                "covers, read that record. `organism adr-link query <commit>` names the "
+                "record behind a commit (`git log -- <file>` finds the commit). Code whose "
+                "commit has no record was changed without a recorded decision. A change "
+                "that goes against a record needs a new record that replaces it.")
+except Exception:
+    pass  # best-effort; never block a session
 
 try:
     with open(cfg_path, encoding="utf-8") as f:

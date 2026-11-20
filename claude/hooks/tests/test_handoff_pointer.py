@@ -247,6 +247,48 @@ def test_inject_pointer():
         sb.close()
 
 
+def test_inject_decision_line():
+    print("inject-handoff.sh says where the decision records are")
+    sb = Sandbox()
+    try:
+        head = "# Decision records"
+        repo = os.path.join(sb.home, "decided")
+        os.makedirs(repo)
+        subprocess.run(["git", "init", "-q", repo], check=True)
+        with open(os.path.join(repo, "CLAUDE.md"), "w") as f:
+            f.write("# decided\n\n## Decisions\n\n- DEC-0001 one line\n")
+        rc, ctx = run_inject(sb, repo, sid(6))
+        check("a repo with a Decisions index gets the paragraph, without a brief",
+              rc == 0 and head in ctx and "organism adr-link query" in ctx)
+        with open(os.path.join(repo, "HANDOFF.md"), "w") as f:
+            f.write("# HANDOFF — decided\n")
+        sub = os.path.join(repo, "src")
+        os.makedirs(sub)
+        rc, ctx = run_inject(sb, sub, sid(6))
+        check("with a brief, the paragraph comes after it, from a subfolder too",
+              ctx.startswith("# HANDOFF — decided") and ctx.count(head) == 1)
+
+        bare = os.path.join(sb.home, "undecided")
+        os.makedirs(bare)
+        subprocess.run(["git", "init", "-q", bare], check=True)
+        with open(os.path.join(bare, "CLAUDE.md"), "w") as f:
+            f.write("# undecided\n\nNo index here, only the words ## Decisions in a line.\n")
+        with open(os.path.join(bare, "HANDOFF.md"), "w") as f:
+            f.write("# HANDOFF — undecided\n")
+        rc, ctx = run_inject(sb, bare, sid(6))
+        check("a CLAUDE.md without the heading gets no paragraph", bool(ctx) and head not in ctx)
+
+        with open(os.path.join(sb.home, "CLAUDE.md"), "w") as f:
+            f.write("## Decisions\n")
+        subprocess.run(["git", "init", "-q", sb.home], check=True)
+        plain = os.path.join(sb.home, "plain2")
+        os.makedirs(plain)
+        rc, ctx = run_inject(sb, plain, sid(6))
+        check("a home-level CLAUDE.md is never read as the project's index", head not in ctx)
+    finally:
+        sb.close()
+
+
 def test_queue_reminder_switch():
     print("inject-handoff.sh: the Reconcile Queue reminder and its off switch")
     sb = Sandbox()
@@ -383,6 +425,7 @@ if __name__ == "__main__":
     test_session_end_never_writes_handoff()
     test_sessions_since()
     test_inject_pointer()
+    test_inject_decision_line()
     test_queue_reminder_switch()
     test_inject_session_and_incognito()
     test_inject_edge_paths()
