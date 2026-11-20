@@ -24,11 +24,11 @@
 #   # forward enforcement (a 1-line shim; never auto-installed):
 #   printf '#!/bin/sh\nexec organism adr-link commit-msg "$1"\n' \
 #     > .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg
-#   # retro link + reverse index (run once, then on each /handoff):
+#   # retro link + reverse index (run once, then on each /harvest):
 #   organism adr-link backfill && organism adr-link backlinks write
 #
 # Config (optional) env ADR_LINK_ENFORCE=require|warn|off (default require).
-# ADR dir: detect-and-conform, resolved the same way as /handoff step 1a (see adr_dir).
+# ADR dir: detect-and-conform, resolved the same way as /harvest step 1a (see adr_dir).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -37,7 +37,7 @@ err() { printf 'adr-link: %s\n' "$*" >&2; }
 
 repo_root() { git rev-parse --show-toplevel 2>/dev/null; }
 
-# The ADR dir under base dir $1, first hit wins, in /handoff step 1a's order: a
+# The ADR dir under base dir $1, first hit wins, in /harvest step 1a's order: a
 # `.adr-dir` file (adr-tools); a log4brains config's project.adrFolder; the first
 # existing of the usual folder names; else docs/adr. Prints an absolute path.
 _resolve_adr_dir() {
@@ -86,7 +86,7 @@ _norm() { grep -oE '[0-9]{1,4}' 2>/dev/null | sed 's/^0*//' | grep -E '^[0-9]+$'
 
 # From free PROSE (commit messages): only ADR/DEC-prefixed tokens. Tolerates the
 # "ADR-12", "ADR 12", "ADR: 0012", "adr_7", "DEC-0003" forms (CLAUDE.md may refer to
-# decisions as DEC-NNNN; /handoff commits use that prefix).
+# decisions as DEC-NNNN; /harvest commits use that prefix).
 extract_nums() { grep -oiE '(adr|dec)[-_: ]*[0-9]{1,4}' 2>/dev/null | _norm || true; }
 
 # From already ADR-scoped VALUES (a git note body line `ADR: 0012`, or a
@@ -105,7 +105,7 @@ _has_decision_docs() {
 }
 
 # Kind of a commit relative to ADR number-pad $2: "records" if it changed the ADR
-# file itself (a /handoff recording/maintenance commit, NOT an implementation),
+# file itself (a /harvest recording/maintenance commit, NOT an implementation),
 # else "implements". The records/implements split keeps recording commits out of
 # the cross-validation signal: "is this decision implemented?" counts only implements.
 _kind_for() {
@@ -115,8 +115,8 @@ _kind_for() {
 
 # Is commit $1 WORK (it changes something besides the decision layer)? $2 = the ADR
 # dir relative to the repo root. Not work: a commit whose files are all ADRs,
-# CLAUDE.md, HANDOFF.md or .gitignore (the index, the brief, /handoff's
-# "chore: keep HANDOFF.md out of git"), and /handoff's own "chore: stop tracking
+# CLAUDE.md, HANDOFF.md or .gitignore (the index, the brief, /harvest's
+# "chore: keep HANDOFF.md out of git"), and /harvest's own "chore: stop tracking
 # generated <dir>" (it deletes the dir's files from the index). --root makes a repo's
 # first commit list its files; without it the first commit listed none and was never
 # linked.
@@ -416,7 +416,7 @@ cmd_link_session() {
   err "link-session: $( [ "$dry" = 1 ] && echo 'would link' || echo linked) $linked work-commit(s) over '$range'$( [ -n "$bound" ] && echo " since $(_when "$bound")") -> $(for n in "$@"; do printf 'ADR-%04d ' "$n"; done); skipped $skipped doc/maintenance + $selfdecl self-declared (own ADR: trailer) commit(s)."
   if [ "$older" -gt 0 ]; then
     err "link-session: left out $older older commit(s), from before $(_when "$bound") ($why). To include them, re-run with --all --since <earlier date>, or --all alone to drop the time bound."
-    # the brief can be written during the session too (an interrupted /handoff notes
+    # the brief can be written during the session too (an interrupted /harvest notes
     # its drafts there; a hand edit), and then it hides the session's earlier commits
     if [ -n "$since" ] && [ "$why" = "HANDOFF.md last written" ]; then
       err "link-session: HANDOFF.md was written after --since $since. If this session wrote it, re-run with --all --since \"$since\" to link the session's earlier commits."
@@ -424,9 +424,9 @@ cmd_link_session() {
   fi
 }
 
-# ---- subcommand: state (what /handoff reads to pick its mode) ----------------------------
+# ---- subcommand: state (what /harvest reads to pick its mode) ----------------------------
 # Read-only. One place that classifies the repo so neither the commit hook nor
-# /handoff needs a flag and the user never picks forward/retro or thinks "linkage".
+# /harvest needs a flag and the user never picks forward/retro or thinks "linkage".
 # Emits parseable key=value lines on stdout + a human summary on stderr.
 cmd_state() {
   local root; root=$(repo_root) || {
@@ -445,7 +445,7 @@ cmd_state() {
   }
   cd "$root"; local d; d=$(adr_dir)
   if [ ! -d "$d" ]; then
-    # Git repo, no ADR dir yet = GREENFIELD, NOT "nothing to do". /handoff can still
+    # Git repo, no ADR dir yet = GREENFIELD, NOT "nothing to do". /harvest can still
     # harvest this session's decisions and create the dir (1a). Compute dirty_work so
     # step 0.5 (commit code before the ADR) engages on the very first handoff too.
     local adrrel0 gdirty=0 line p
@@ -461,7 +461,7 @@ cmd_state() {
     { [ "$(git rev-list --count HEAD 2>/dev/null || echo 0)" -ge 2 ] || _has_decision_docs "$root"; } && gpre=yes
     printf 'decision_repo=greenfield\nadrs=0\nenforcer=%s\nretro_backlog=%s\nretro_checkpoint=none\ndirty_work=%s\n' \
       "$( [ -x "$root/.git/hooks/commit-msg" ] && echo local || { ghp=$(git config --get core.hooksPath 2>/dev/null||true); [ -n "$ghp" ] && [ -e "$ghp/commit-msg" ] && echo global-gentle || echo off; } )" "$gpre" "$gdirty"
-    err "greenfield, no ADRs yet; /handoff can create the first ones$([ "$gpre" = yes ] && echo ' (and reconstruct undocumented ones)'). dirty implementation files: $gdirty"
+    err "greenfield, no ADRs yet; /harvest can create the first ones$([ "$gpre" = yes ] && echo ' (and reconstruct undocumented ones)'). dirty implementation files: $gdirty"
     return 0
   fi
   local adrrel nadr enforcer pairs total unlinked covered uncovered pre f n4 H has
@@ -494,7 +494,7 @@ cmd_state() {
   # unlinked-ratio is a noisy proxy (most commits aren't decisions, so it stays high
   # forever). Once the user dispositions it, a `.retro-checkpoint` marker exists
   # pointing at a real commit, stay quiet: new decisions are forward-harvested, not
-  # retro. `/handoff --retro` forces a re-scan; `retro-checkpoint clear` re-enables.
+  # retro. `/harvest --retro` forces a re-scan; `retro-checkpoint clear` re-enables.
   local cp="$d/.retro-checkpoint" cpsha="" pre=no
   [ -f "$cp" ] && cpsha=$(grep -oE '[0-9a-f]{7,40}' "$cp" 2>/dev/null | head -1 || true)
   if [ -n "$cpsha" ] && git rev-parse -q --verify "${cpsha}^{commit}" >/dev/null 2>&1; then
@@ -519,7 +519,7 @@ cmd_state() {
 }
 
 # ---- subcommand: retro-checkpoint (disposition the one-time backlog) ---------
-# set   -> mark retro reconciled at HEAD (stages the marker; /handoff commits it).
+# set   -> mark retro reconciled at HEAD (stages the marker; /harvest commits it).
 # clear -> remove the marker (re-enable retro offers).
 # show  -> print current checkpoint.
 cmd_retro_checkpoint() {
@@ -530,8 +530,8 @@ cmd_retro_checkpoint() {
   case "$action" in
     set)
       local sha; sha=$(git rev-parse HEAD 2>/dev/null) || { err "no HEAD yet"; exit 1; }
-      { printf '# Retro backlog reconciled up to this commit: /handoff stops offering retro past here.\n'
-        printf '# re-scan: /handoff --retro   ·   re-enable offers: adr-link.sh retro-checkpoint clear\n%s\n' "$sha"; } > "$cp"
+      { printf '# Retro backlog reconciled up to this commit: /harvest stops offering retro past here.\n'
+        printf '# re-scan: /harvest --retro   ·   re-enable offers: adr-link.sh retro-checkpoint clear\n%s\n' "$sha"; } > "$cp"
       git add "$cp" 2>/dev/null || true
       err "retro-checkpoint set at $(git rev-parse --short "$sha") (staged; will commit with the handoff)"
       ;;
@@ -542,7 +542,7 @@ cmd_retro_checkpoint() {
 
 # ---- subcommand: ignore-scan (flag generated byproduct in the dirty tree) -----
 # Read-only. Lists directories of likely GENERATED files sitting uncommitted, dated
-# daily outputs, or known junk dir names (logs/cache/build/...), so /handoff's step
+# daily outputs, or known junk dir names (logs/cache/build/...), so /harvest's step
 # 0.5 can offer to gitignore them instead of bulk-committing data (the gap that let
 # one project accumulate 132 tracked data files). Output: "<dir>\t<count>\t<reason>" per line;
 # empty output = nothing suspicious. Conservative: only strong signals, to avoid

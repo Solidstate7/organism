@@ -70,5 +70,5 @@ reconcile-pairings.json
 !**/paths.env.example
 !**/reconcile-pairings.example.json
 # case-insensitive macOS FS: the HANDOFF.md re-deny above also matches the
-# lowercase /handoff command file, keep that one code file.
-!/claude/commands/handoff.md
+# lowercase /harvest command file, keep that one code file.
+!/claude/commands/harvest.md

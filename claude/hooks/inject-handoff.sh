@@ -128,7 +128,7 @@ if handoff_path and os.path.isfile(handoff_path):
         parts.append(f.read())
 
 # Pointer to the sessions the brief doesn't cover. The mirror notes hold
-# them in full; this lists them so a forgotten /handoff costs the next session one Read.
+# them in full; this lists them so a forgotten /harvest costs the next session one Read.
 try:
     import subprocess, time, datetime
     import mirror

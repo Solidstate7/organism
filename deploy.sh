@@ -46,7 +46,7 @@ if [ -d "$DST/hooks" ] && [ ! -L "$DST/hooks" ]; then
   fi
 fi
 
-# plugin mode: the plugin's skills replace the commands link (both would list /handoff)
+# plugin mode: the plugin's skills replace the commands link (both would list /harvest)
 if [ "$MODE" = "plugin-inplace" ] && [ -L "$DST/commands" ] && [ "$(readlink "$DST/commands")" = "$SRC/commands" ]; then
   rm -f "$DST/commands" && echo "  removed the commands link (the plugin's skills replace it)"
 fi

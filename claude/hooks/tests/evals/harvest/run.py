@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Eval harness for the /handoff skill: runs headless Claude on six sample projects and checks
+"""Eval harness for the /harvest skill: runs headless Claude on six sample projects and checks
 what ended up on disk and in git. NOT part of run-all.sh (the name is not test_*): it calls
 a model, costs money and is not deterministic. See README.md in this folder.
 
@@ -344,13 +344,13 @@ def run_claude(info, args):
                GIT_COMMITTER_NAME="Eval Author", GIT_COMMITTER_EMAIL="eval@example.invalid",
                GIT_CEILING_DIRECTORIES=info["dir"])
     if args.bare:
-        # the bare /handoff name is a user-level command: link it into the sandboxed config dir
+        # the bare /harvest name is a user-level command: link it into the sandboxed config dir
         cmds = os.path.join(cfg, "commands")
         if not os.path.lexists(cmds):
             os.symlink(os.path.join(ROOT, "claude", "commands"), cmds)
-        prompt = "/handoff " + info["note"]
+        prompt = "/harvest " + info["note"]
     else:
-        prompt = "/organism:handoff " + info["note"]
+        prompt = "/organism:harvest " + info["note"]
     cmd = [args.claude, "-p", prompt, "--plugin-dir", ROOT, "--output-format", "stream-json", "--verbose"]
     if info["name"] == "push":
         cmd += ["--allowedTools", "Bash(git push:*)"]   # the only case where a push is expected
@@ -604,11 +604,11 @@ def evaluate(info, args):
 
 
 # ----------------------------------------------------------------------------------------- main
-USAGE = """The /handoff evals call a model, so they only run when asked.
+USAGE = """The /harvest evals call a model, so they only run when asked.
 
   ORGANISM_EVALS=1 python3 %(me)s                    run all six cases
   ORGANISM_EVALS=1 python3 %(me)s --cases secret,push
-  ORGANISM_EVALS=1 python3 %(me)s --bare             use the bare /handoff name
+  ORGANISM_EVALS=1 python3 %(me)s --bare             use the bare /harvest name
   python3 %(me)s --setup-only DIR                    just build the sample projects in DIR
 
 Needs the claude CLI on PATH and ANTHROPIC_API_KEY (or CLAUDE_CODE_OAUTH_TOKEN) in the
@@ -617,11 +617,11 @@ See %(readme)s for details."""
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Eval harness for /handoff (see README.md)", add_help=True)
+    ap = argparse.ArgumentParser(description="Eval harness for /harvest (see README.md)", add_help=True)
     ap.add_argument("--setup-only", metavar="DIR", help="build the sample projects under DIR and stop")
     ap.add_argument("--cases", default=",".join(CASES), help="comma-separated subset of: " + ", ".join(CASES))
     ap.add_argument("--bare", action="store_true", default=os.environ.get("ORGANISM_EVALS_BARE") == "1",
-                    help="invoke /handoff instead of /organism:handoff (also ORGANISM_EVALS_BARE=1)")
+                    help="invoke /harvest instead of /organism:harvest (also ORGANISM_EVALS_BARE=1)")
     ap.add_argument("--claude", default=os.environ.get("ORGANISM_EVALS_CLAUDE", "claude"), help="claude binary")
     ap.add_argument("--timeout", type=int, default=int(os.environ.get("ORGANISM_EVALS_TIMEOUT", "900")),
                     help="seconds per case")
@@ -654,7 +654,7 @@ def main():
         print("claude CLI not found (set ORGANISM_EVALS_CLAUDE)", file=sys.stderr)
         return 2
 
-    root = tempfile.mkdtemp(prefix="organism-handoff-evals-")
+    root = tempfile.mkdtemp(prefix="organism-harvest-evals-")
     print("working in %s%s" % (root, " (kept)" if args.keep else ""))
     total_fail = 0
     try:

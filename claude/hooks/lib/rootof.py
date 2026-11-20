@@ -1,4 +1,4 @@
-"""rootof: the one answer to "which folder does /handoff work from", shared by
+"""rootof: the one answer to "which folder does /harvest work from", shared by
 handoff-state.py, adr-index.py and adr-link.sh.
 
 find_root(start) -> (root, kind)

@@ -80,10 +80,10 @@ check("SessionEnd has no timeout (a plugin's can't raise the budget)",
 check("no hook names ~/.claude/hooks", "/.claude/hooks" not in json.dumps(hj))
 
 print("plugin: skills")
-want = {"handoff": "handoff", "incognito": "incognito", "setup": "organism-setup"}
+want = {"harvest": "harvest", "incognito": "incognito", "setup": "organism-setup"}
 skill_dirs = sorted(d for d in os.listdir(os.path.join(ROOT, "skills"))
                     if os.path.isdir(os.path.join(ROOT, "skills", d)))
-check("skills are handoff, incognito and setup", skill_dirs == sorted(want))
+check("skills are harvest, incognito and setup", skill_dirs == sorted(want))
 for d, name in want.items():
     p = os.path.join(ROOT, "skills", d, "SKILL.md")
     fm, text = frontmatter(p) if os.path.isfile(p) else ({}, "")
@@ -99,10 +99,10 @@ for d, name in want.items():
     check(f"{d}: claude/commands/{d}.md links to the skill (one source for legacy mode)",
           os.path.islink(link) and os.readlink(link) == f"../../skills/{d}/SKILL.md"
           and os.path.realpath(link) == os.path.realpath(p))
-_, handoff = frontmatter(os.path.join(ROOT, "skills", "handoff", "SKILL.md"))
-check("handoff calls organism adr-link and organism guard-scan",
-      "organism adr-link state" in handoff and "organism guard-scan" in handoff)
-check("handoff names the ~/.local/bin/organism fallback", "~/.local/bin/organism" in handoff)
+_, harvest = frontmatter(os.path.join(ROOT, "skills", "harvest", "SKILL.md"))
+check("harvest calls organism adr-link and organism guard-scan",
+      "organism adr-link state" in harvest and "organism guard-scan" in harvest)
+check("harvest names the ~/.local/bin/organism fallback", "~/.local/bin/organism" in harvest)
 
 print("plugin: root rules")
 for name in ("settings.json", "CLAUDE.md", "commands", "agents"):

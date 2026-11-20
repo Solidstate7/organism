@@ -2,12 +2,12 @@
 # tests/test_adr_link.sh: which commits link-session joins to a new decision record,
 # and where every subcommand looks for the records.
 # Work commits since the last `docs(adr):` commit are linked, a repo's FIRST commit
-# included; /handoff's own housekeeping (`chore: keep HANDOFF.md out of git`,
+# included; /harvest's own housekeeping (`chore: keep HANDOFF.md out of git`,
 # `chore: stop tracking generated <dir>`) and the record commit itself are not.
 # A time bound keeps the links within the session: the later of --since and HANDOFF.md's
 # last write, else 24 hours when there is no earlier record; older commits are counted,
 # never linked, and --all lifts the bound. Options go before the ADR numbers, and a
-# number with no record is reported, not linked. The ADR dir resolves like /handoff
+# number with no record is reported, not linked. The ADR dir resolves like /harvest
 # step 1a: .adr-dir, a log4brains config, the usual folder names in order, docs/adr.
 # Self-contained under mktemp; never touches a real repo.
 # Run:  bash claude/hooks/tests/test_adr_link.sh
@@ -31,7 +31,7 @@ echo more >> app.py;                        WORK=$(c "feat: the change the decis
 mkdir -p docs/adr; printf '# 0001. Keep it simple\n' > docs/adr/0001-keep-it-simple.md
 printf '# Decisions\n- 0001\n' > CLAUDE.md; REC=$(c "docs(adr): record 0001")
 
-say "link-session after a first /handoff"
+say "link-session after a first /harvest"
 bash "$AL" link-session 1 2>/dev/null
 q=$(bash "$AL" query 1 2>/dev/null)
 has() { printf '%s\n' "$q" | grep -q "$1"; }
@@ -59,7 +59,7 @@ age() { python3 -c 'import os,sys,time; t=time.time()-int(sys.argv[2]); os.utime
 inq() { printf '%s\n' "$1" | grep -q -e "$2"; }
 fresh() { mkdir -p "$1"; cd "$1" || exit 1; git init -q; git config user.email t@test.invalid; git config user.name t; }
 
-say "first /handoff in a repo with years of history"
+say "first /harvest in a repo with years of history"
 fresh "$T/old"
 echo a > a.py;  OLD1=$(ca $((3*365*DAY)) "feat: the original app")
 echo b >> a.py; OLD2=$(ca $((400*DAY))   "feat: a feature from last year")
@@ -110,7 +110,7 @@ check "the missing one is named, not hidden"              "$( inq "$msg" 'ADR-00
 msg=$(bash "$AL" link-session 99 2>&1 >/dev/null); rc=$?
 check "with no valid number it fails and says so"         "$( [ "$rc" = 1 ] && inq "$msg" 'nothing linked' && echo 1 || echo 0)"
 
-say "a later /handoff: the previous brief bounds the range"
+say "a later /harvest: the previous brief bounds the range"
 fresh "$T/later"
 echo a > a.py; BEFORE=$(ca $((5*DAY)) "feat: work the first record covers")
 mkdir -p docs/adr; printf '# 0001\n' > docs/adr/0001-first.md; ca $((5*DAY)) "docs(adr): record 0001" >/dev/null
@@ -149,7 +149,7 @@ check "and that re-run links the session's commits"        "$( inq "$d" "$S1" &&
 msg=$(bash "$AL" link-session --dry 2 2>&1 >/dev/null)
 check "without --since there is no such hint"              "$( inq "$msg" 'written after --since' && echo 0 || echo 1)"
 
-say "the ADR dir resolves like /handoff step 1a"
+say "the ADR dir resolves like /harvest step 1a"
 fresh "$T/decisions"
 echo a > a.py; W=$(ca 60 "feat: work")
 mkdir -p docs/decisions; printf '# 0001\n' > docs/decisions/0001-x.md; R=$(ca 0 "docs(adr): record 0001")

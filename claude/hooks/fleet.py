@@ -5,13 +5,13 @@
   organism fleet up <name> [--effort E] [--dry]    summon: start a fresh session in the agent's repo
                                                    (resummon when it has lived before)
   organism fleet down <name> [--no-handoff] [--dry]
-                                                   harvest: /handoff writes the brief, then /exit
+                                                   harvest: /harvest writes the brief, then /exit
   organism fleet ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
                                                    the ledger: every summon, order, report and harvest
 
 An agent's life has four steps. Summon starts a fresh session that reads only the agent's
 brief (HANDOFF.md). Work is the orders it gets and the reports it sends. Harvest runs
-/handoff, which rewrites the brief, and then /exit. Resummon starts the next fresh session
+/harvest, which rewrites the brief, and then /exit. Resummon starts the next fresh session
 from that brief. Each new session is one generation.
 
 The roster is a JSON file, ~/.claude/state/organism-fleet.json ($ORGANISM_FLEET_CONFIG
@@ -28,10 +28,10 @@ by hand:
                 (agent to agent). Only the first line is kept, after secret redaction.
 
 `up` and `down` drive the terminal through herdr-core (`hc`). Without it, `up` prints the
-command to run and `down` refuses (run /handoff and /exit in the session yourself).
+command to run and `down` refuses (run /harvest and /exit in the session yourself).
 `up` answers one prompt itself: the folder-trust question, with Yes (the roster names the
 repo). `down` acts on the session running in the agent's terminal and answers no dialog:
-a permission request or a question during /handoff stops it with the session left open.
+a permission request or a question during /harvest stops it with the session left open.
 The one key it presses unasked is Esc on /exit's unsent-feedback-draft dialog, which
 discards the draft. The hook never fails a session: a roster it can't read means no work.
 Run:  python3 claude/hooks/fleet.py <command>
@@ -633,7 +633,7 @@ def cmd_down(cfg, name, handoff=True, dry=False):
     hd = herdr(cfg)
     if hd is None:
         sys.exit("organism fleet down needs herdr-core (hc) to type into the session. "
-                 "Harvest it by hand: run /handoff in the session, then /exit.")
+                 "Harvest it by hand: run /harvest in the session, then /exit.")
     if not live_session(cfg, name) or name not in hd.terminals():
         sys.exit(f"{name} is not live in a fleet terminal")
     s = terminal_session(cfg, name, hd)
@@ -646,7 +646,7 @@ def cmd_down(cfg, name, handoff=True, dry=False):
         why = "handoff is off in the roster (its decisions are recorded elsewhere)"
     elif not handoff:
         why = "--no-handoff"
-    cmd = cfg.get("handoff_command", "handoff")
+    cmd = cfg.get("handoff_command", "harvest")
     plan = (f"{'close' if why else 'harvest'} {name}: session {s.get('sessionId')} (pid {s.get('pid')}): "
             + (f"no /{cmd} ({why}), " if why else f"/{cmd}, ") + "/exit, hc kill, hc rm")
     print(plan)

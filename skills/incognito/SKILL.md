@@ -18,5 +18,5 @@ Notes:
 - `$ARGUMENTS` is one of `on`, `off`, `toggle`, `purge` or `status` (empty means `status`).
 - `purge` is retroactive: it scrubs THIS session's already-recorded mirror (its `sessions/<id>.md`, its `.sessions.json` entry, and its row and featured reply in `latest.md`), seals every turn so far so it stays gone even across a `--backfill`, and turns incognito on. Other machines drop its row once the deletion syncs. Plain `on` is forward-only.
 - Incognito stays on until you turn it off, across a resume too: a resumed incognito session gets a one-line reminder at its start, not a silent resume.
-- This only gates `obsidian-mirror.py` (the session to `_claude-live/` recorder). The raw transcript, the reconciler, and `/handoff` are unaffected.
+- This only gates `obsidian-mirror.py` (the session to `_claude-live/` recorder). The raw transcript, the reconciler, and `/harvest` are unaffected.
 - It is a fast local toggle: do nothing else, and do not explain unless asked.

@@ -7,7 +7,7 @@
 # script, never the deployed ~/.claude one (a fresh clone must be testable undeployed).
 # Also covers --status, the empty-denylist allow, the
 # non-Bash tool-name path, and the guard-publish.sh wrapper passthrough.
-# --scan: the record check /handoff runs on ADR files before committing them.
+# --scan: the record check /harvest runs on ADR files before committing them.
 # Also: push classification by git's subcommand (and inside bash -c, eval, $( ), here-docs
 # fed to a shell), the newer publish paths (gh posts, docker, cargo, twine, scp/rsync,
 # cloud storage copies, firebase/wrangler/fly/surge), web tools, exemptions that stay
@@ -326,7 +326,7 @@ assert_rc "unreadable hook payload → block"                          2 "$(runj
 assert_rc "an error inside the scan (cwd not a string) → block"      2 "$(runjson '{"tool_name":"Bash","tool_input":{"command":"cd sub && git push"},"cwd":42}')"
 if grep -q 'BLOCK-ERROR' "$GUARD_PUBLISH_LOG" 2>/dev/null; then say "  ✓ an internal error is logged as such"; else say "  ✗ internal error not logged"; FAILS=$((FAILS+1)); fi
 
-say "--scan: record check before /handoff commits"
+say "--scan: record check before /harvest commits"
 scan() { node "$G" --scan "$@" >/dev/null 2>&1; echo $?; }
 AR="$T/adr-repo"; mkdir -p "$AR/docs/adr"; git -C "$AR" init -q
 printf '# 0001. Choose zeta-plan over the old scheme\n' > "$AR/docs/adr/0001-x.md"

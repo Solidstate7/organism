@@ -183,7 +183,7 @@ armed:<N> source:<path>
 
 ## Record scan (`--scan`)
 
-`guard-publish.sh --scan <file>...` checks files that are *about to be committed* against the same denylist, before any publish exists to block. Its one caller is `/handoff` step 1g, on the ADR files it just wrote plus `CLAUDE.md`: a decision record is filled from a session, sessions wander into other projects and private matters, and a committed record travels with every later push. Same match (case-insensitive substring), same per-repo exemptions (root = the first file's git toplevel, so a private repo named after its own codename still passes). A hit exits 2 with the term and file on stderr and an unmasked `SCAN-BLOCK` line in the local log; no phone alert, because nothing has left the machine and the user is at the terminal. An empty denylist, no files, an unreadable file or an internal error exits 0 with a stderr line saying what was not checked: fail-open, because a record check that cannot run must not stop `/handoff`, which reports it and continues. `--scan` carries no stdin payload and is checked before the hook input is read.
+`guard-publish.sh --scan <file>...` checks files that are *about to be committed* against the same denylist, before any publish exists to block. Its one caller is `/harvest` step 1g, on the ADR files it just wrote plus `CLAUDE.md`: a decision record is filled from a session, sessions wander into other projects and private matters, and a committed record travels with every later push. Same match (case-insensitive substring), same per-repo exemptions (root = the first file's git toplevel, so a private repo named after its own codename still passes). A hit exits 2 with the term and file on stderr and an unmasked `SCAN-BLOCK` line in the local log; no phone alert, because nothing has left the machine and the user is at the terminal. An empty denylist, no files, an unreadable file or an internal error exits 0 with a stderr line saying what was not checked: fail-open, because a record check that cannot run must not stop `/harvest`, which reports it and continues. `--scan` carries no stdin payload and is checked before the hook input is read.
 
 ## Hard block message
 
@@ -236,7 +236,7 @@ Do NOT publish this. If it's a false positive, edit the term out of that vault p
 
 ## Error handling
 
-A content scan that runs out of time blocks (see §Time limit). Any other exception in the hook, an unreadable payload included, **blocks while terms are armed** (exit 2): the guard cannot vouch for a call it did not check. The stderr line names the error, and a `BLOCK-ERROR` line goes to the local log. With an empty denylist there is nothing to protect, so an error allows with a stderr breadcrumb. `--scan` keeps failing open on an internal error (its caller, `/handoff`, reports and continues). If no denylist file is readable, the list is empty and every call is allowed.
+A content scan that runs out of time blocks (see §Time limit). Any other exception in the hook, an unreadable payload included, **blocks while terms are armed** (exit 2): the guard cannot vouch for a call it did not check. The stderr line names the error, and a `BLOCK-ERROR` line goes to the local log. With an empty denylist there is nothing to protect, so an error allows with a stderr breadcrumb. `--scan` keeps failing open on an internal error (its caller, `/harvest`, reports and continues). If no denylist file is readable, the list is empty and every call is allowed.
 
 ## Wrapper (`guard-publish.sh`)
 

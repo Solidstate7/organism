@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""handoff-state: the facts /handoff may state about a project, printed by a script so the
+"""handoff-state: the facts /harvest may state about a project, printed by a script so the
 brief never carries a hash, a branch or a pushed-or-not claim written from memory.
 
   organism handoff-state            print the state; save a copy of the current brief
@@ -264,7 +264,7 @@ def print_state(root, kind, save=True):
     if vault:
         out.append("vault_root=" + vault)
     if kind == "none":
-        out.append("no repository and no vault above this folder: /handoff writes no brief here")
+        out.append("no repository and no vault above this folder: /harvest writes no brief here")
     if brief_text is not None:
         out.append("brief=" + brief)
         out.append("brief_written=" + fmt_time(os.path.getmtime(brief)))

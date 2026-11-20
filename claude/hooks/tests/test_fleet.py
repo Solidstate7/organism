@@ -420,7 +420,7 @@ def test_up_down():
     check("up on an unknown agent is refused", r.returncode != 0 and "no agent nobody" in r.stderr)
     r = b.run("down", "api")
     check("down without herdr-core refuses and says how to harvest by hand",
-          r.returncode != 0 and "/handoff" in r.stderr and "/exit" in r.stderr)
+          r.returncode != 0 and "/harvest" in r.stderr and "/exit" in r.stderr)
 
     hc = fake_hc(b.home, ["notes", "web"])
     b.herdr = hc
@@ -428,15 +428,15 @@ def test_up_down():
     live = str(os.getpid())
     b.session_file(live, sessionId="n-live", name="notes-2", cwd=b.repos["notes"])
     r = b.run("down", "notes", "--dry")
-    check("down --dry on a handoff-off agent: plans a close without /handoff",
-          r.returncode == 0 and "close notes" in r.stdout and "no /handoff" in r.stdout and "handoff is off" in r.stdout)
+    check("down --dry on a handoff-off agent: plans a close without /harvest",
+          r.returncode == 0 and "close notes" in r.stdout and "no /harvest" in r.stdout and "handoff is off" in r.stdout)
     with open(os.path.join(b.home, "hc.log")) as fh:
         log = fh.read()
     check("…and types nothing", "keys" not in log and "kill" not in log)
     b.session_file(live, sessionId="w-live", name="web-2", cwd=b.repos["web"])
     r = b.run("harvest", "web", "--dry")
-    check("harvest --dry on a normal agent: plans /handoff, /exit, kill, rm",
-          r.returncode == 0 and "harvest web" in r.stdout and "/handoff, /exit" in r.stdout)
+    check("harvest --dry on a normal agent: plans /harvest, /exit, kill, rm",
+          r.returncode == 0 and "harvest web" in r.stdout and "/harvest, /exit" in r.stdout)
     r = b.run("down", "web", "--no-handoff", "--dry")
     check("--no-handoff: plans a close", "close web" in r.stdout and "--no-handoff" in r.stdout)
     r = b.run("up", "web", "--dry")
@@ -489,7 +489,7 @@ elif a[0] == "keys":
             cmd, st["box"] = st["box"], ""
             if st.get("screen"):
                 st["entered_on_dialog"] = True
-            elif cmd == "/handoff":
+            elif cmd == "/harvest":
                 if st.get("handoff") == "blocked":
                     st["state"] = "blocked"
                     st["screen"] = ["Do you want to proceed?", "  \u276f 1. Yes", "    2. No"]
@@ -590,19 +590,19 @@ def test_down_driver():
     check("no session runs in the agent's terminal: down refuses", r.returncode != 0 and "terminal" in r.stderr)
     os.remove(os.path.join(b.sessions, f"{os.getpid()}.json"))
 
-    # a garbled /handoff is cleared from the box
-    stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, drop="f")
+    # a garbled /harvest is cleared from the box
+    stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, drop="v")
     r = b.run("down", "web")
     st = hc_state(b)
     check("a command that didn't type cleanly: down stops", r.returncode != 0)
     check("…and the box is empty again, so the next Enter runs nothing", st["box"] == "")
     check("…and no Enter was pressed", not any(l[:1] == ["keys"] and "enter" in l for l in hc_log(b)))
 
-    # a dialog during /handoff is never answered
+    # a dialog during /harvest is never answered
     stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, handoff="blocked")
     r = b.run("down", "web")
     enters = [l for l in hc_log(b) if l[:1] == ["keys"] and "enter" in l]
-    check("a dialog during /handoff: down stops and says so",
+    check("a dialog during /harvest: down stops and says so",
           r.returncode != 0 and "dialog" in r.stderr and "Traceback" not in r.stderr)
     check("…without pressing Enter on it", len(enters) == 1 and not hc_state(b).get("entered_on_dialog"))
     check("…and the session stays", alive(term_pid))

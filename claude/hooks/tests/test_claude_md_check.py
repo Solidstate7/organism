@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """tests for hooks/claude-md-check.py: slash commands, including the plugin form
-/organism:handoff, are never taken for paths, while a real missing path is reported.
+/organism:harvest, are never taken for paths, while a real missing path is reported.
 Run:  python3 claude/hooks/tests/test_claude_md_check.py"""
 import importlib.util
 import os
@@ -25,7 +25,7 @@ def check(name, cond):
 
 
 print("claude-md-check: slash commands are not paths")
-for cmd in ("/handoff", "/incognito", "/organism:handoff", "/organism:organism-setup"):
+for cmd in ("/harvest", "/incognito", "/organism:harvest", "/organism:organism-setup"):
     check(f"{cmd} is a command", not cmc.looks_like_path(cmd))
 for path in ("src/app.py", "docs/ADVANCED.md"):
     check(f"{path} is a path", cmc.looks_like_path(path))
@@ -36,10 +36,10 @@ try:
     os.makedirs(os.path.join(d, "src"))
     open(os.path.join(d, "src", "here.py"), "w").close()
     with open(os.path.join(d, "CLAUDE.md"), "w") as f:
-        f.write("Run `/organism:handoff` or `/handoff` at the end. Code: `src/here.py`, `src/gone.py`.\n")
+        f.write("Run `/organism:harvest` or `/harvest` at the end. Code: `src/here.py`, `src/gone.py`.\n")
     out = subprocess.run([sys.executable, SCRIPT, d], capture_output=True, text=True).stdout
     check("reports the one missing path", "1 missing" in out and "src/gone.py" in out)
-    check("never names the command", "organism:handoff" not in out)
+    check("never names the command", "organism:harvest" not in out)
 finally:
     shutil.rmtree(d, ignore_errors=True)
 

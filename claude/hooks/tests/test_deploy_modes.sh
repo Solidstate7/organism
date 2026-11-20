@@ -44,7 +44,7 @@ for item in hooks commands skills keybindings.json git-hooks; do
   [ -e "$R/claude/$item" ] || continue
   t "~/.claude/$item links into the clone" '[ "$(readlink "$H/.claude/$item")" = "$R/claude/$item" ]'
 done
-t "the /handoff command resolves through the links" 'grep -q "^name: handoff" "$H/.claude/commands/handoff.md"'
+t "the /harvest command resolves through the links" 'grep -q "^name: harvest" "$H/.claude/commands/harvest.md"'
 t "pairings were carried into state" '[ -f "$H/.claude/state/reconcile-pairings.json" ]'
 t "the real hooks dir was backed up, not deleted" '[ -f "$H/.claude/hooks.pre-organism.bak/reconcile-pairings.json" ]'
 n=$(organism_cmds "$H/.claude/settings.json" | wc -l | tr -d ' ')

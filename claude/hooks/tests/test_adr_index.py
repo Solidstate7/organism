@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tests for adr-index.py: the record bookkeeping /handoff used to describe in prose.
+"""tests for adr-index.py: the record bookkeeping /harvest used to describe in prose.
 `next` resolves the records folder in step 1a's order (.adr-dir, log4brains, the usual
 folders, docs/adr), continues the numbering with the same padding and names the style of
 the latest record; `moc` regenerates the vault's decisions MOC keeping an existing header

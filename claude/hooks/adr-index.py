@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""adr-index: the mechanical parts of /handoff's record keeping, so the skill reads a value
+"""adr-index: the mechanical parts of /harvest's record keeping, so the skill reads a value
 instead of describing a procedure.
 
   organism adr-index next [--root DIR]
@@ -52,7 +52,7 @@ vault_of = rootof.obsidian_vault_of   # the Obsidian vault holding a folder, '' 
 
 
 def resolve_adr_dir(root):
-    """The records folder, in /handoff step 1a's order: .adr-dir, a log4brains config, the
+    """The records folder, in /harvest step 1a's order: .adr-dir, a log4brains config, the
     first existing usual folder, else docs/adr (which may not exist yet)."""
     p = read(os.path.join(root, ".adr-dir"))
     if p and p.strip():
@@ -200,7 +200,7 @@ def cmd_moc(root, write, project):
     if not header.strip():
         name = project or os.path.basename(root.rstrip(os.sep))
         header = ("---\ntags: [adr, moc]\n---\n# Decisions — %s\n\n> [!info] Map of Content for "
-                  "this project's architecture decisions. Auto-maintained by `/handoff`; full "
+                  "this project's architecture decisions. Auto-maintained by `/harvest`; full "
                   "records are the linked ADR notes in `%s/`.\n\n" % (name, rel))
     by_num = {n: base for n, base, _ in recs}
     sections = {}
@@ -316,7 +316,7 @@ def main(argv):
             print("adr-index: unknown argument " + a, file=sys.stderr)
             return 2
         i += 1
-    # no --root: the folder /handoff works from (the repo, else the vault), never a subfolder
+    # no --root: the folder /harvest works from (the repo, else the vault), never a subfolder
     root = os.path.realpath(root) if root else rootof.find_root(os.getcwd())[0]
     if cmd == "next":
         return cmd_next(root)

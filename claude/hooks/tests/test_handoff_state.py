@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tests for handoff-state.py: the facts /handoff states about a repo come from this script.
+"""tests for handoff-state.py: the facts /harvest states about a repo come from this script.
 It reports the branch, HEAD, upstream, ahead and behind, the dirty files, every hash the
 brief names with exists and pushed, strips credentials from remote URLs, never reads a
 date as a hash, saves a copy of the brief, and --check finds a hash the new brief invents,

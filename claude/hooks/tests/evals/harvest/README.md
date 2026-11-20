@@ -1,6 +1,6 @@
-# /handoff evals
+# /harvest evals
 
-An eval harness for the `/handoff` skill (`skills/handoff/SKILL.md`). It runs headless Claude
+An eval harness for the `/harvest` skill (`skills/harvest/SKILL.md`). It runs headless Claude
 with the plugin on six sample projects and checks what ends up on disk and in git. It is
 **not** part of `run-all.sh`: it calls a model, costs money and gives slightly different
 answers each time. Run it by hand before changing the skill, and after.
@@ -8,11 +8,11 @@ answers each time. Run it by hand before changing the skill, and after.
 ## Running it
 
 ```
-python3 claude/hooks/tests/evals/handoff/run.py            # prints how to run it, exits 0
-ORGANISM_EVALS=1 python3 claude/hooks/tests/evals/handoff/run.py
-ORGANISM_EVALS=1 python3 claude/hooks/tests/evals/handoff/run.py --cases secret,push --keep
-ORGANISM_EVALS=1 python3 claude/hooks/tests/evals/handoff/run.py --bare
-python3 claude/hooks/tests/evals/handoff/run.py --setup-only /tmp/handoff-samples
+python3 claude/hooks/tests/evals/harvest/run.py            # prints how to run it, exits 0
+ORGANISM_EVALS=1 python3 claude/hooks/tests/evals/harvest/run.py
+ORGANISM_EVALS=1 python3 claude/hooks/tests/evals/harvest/run.py --cases secret,push --keep
+ORGANISM_EVALS=1 python3 claude/hooks/tests/evals/harvest/run.py --bare
+python3 claude/hooks/tests/evals/harvest/run.py --setup-only /tmp/harvest-samples
 ```
 
 What you need: the `claude` CLI on PATH, and credentials in the environment
@@ -26,14 +26,14 @@ Options and variables:
 |---|---|---|
 | `--setup-only DIR` | | Build the six sample projects under `DIR` and stop. No model call. |
 | `--cases a,b` | | Run only these cases (`greenfield`, `brownfield`, `dirty`, `secret`, `vault`, `push`). |
-| `--bare` | `ORGANISM_EVALS_BARE=1` | Send `/handoff ...` instead of `/organism:handoff ...`. Both names work; the bare one is the user-level command, linked into the sandboxed config dir. |
+| `--bare` | `ORGANISM_EVALS_BARE=1` | Send `/harvest ...` instead of `/organism:harvest ...`. Both names work; the bare one is the user-level command, linked into the sandboxed config dir. |
 | `--claude BIN` | `ORGANISM_EVALS_CLAUDE` | Which claude binary. |
 | `--timeout N` | `ORGANISM_EVALS_TIMEOUT` | Seconds per case (default 900). |
 | `--keep` | | Keep the temp directory. Each case folder holds the project, `note.txt`, `case.json`, and after a run `run.jsonl` (the full event stream). |
 | | `ORGANISM_EVALS_ARGS` | Extra arguments for `claude` (for example `--model sonnet`). |
 | | `ORGANISM_EVALS=1` | Required to run the model. Without it the script only prints usage. |
 
-The command is `claude -p "/organism:handoff <note>" --plugin-dir <repo root> --output-format
+The command is `claude -p "/organism:harvest <note>" --plugin-dir <repo root> --output-format
 stream-json --verbose`, run inside the sample project. The note is the user's argument: a
 short pasted decision exchange, because a headless run has no earlier conversation to harvest.
 The same exchange is also written as a transcript under the sandboxed
@@ -67,4 +67,4 @@ run exits 1.
 
 `--setup-only DIR` builds the same six projects and prints their paths; it refuses to overwrite
 an existing case folder. Use it to look at the starting states, or to try the skill by hand
-(`cd DIR/dirty/project`, start `claude --plugin-dir <repo root>`, run `/organism:handoff`).
+(`cd DIR/dirty/project`, start `claude --plugin-dir <repo root>`, run `/organism:harvest`).

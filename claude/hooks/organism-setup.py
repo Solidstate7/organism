@@ -279,7 +279,7 @@ def sec_identity():
 
 def sec_repos(raw, mode, pu):
     hr("Code repos")
-    # Every project where /handoff runs gets its note, so there is no per-project
+    # Every project where /harvest runs gets its note, so there is no per-project
     # question here. The doc check's "leave out" list is asked in its own, opt-in section.
     code_root = prompt("Where do your code projects live? [CLAUDE_CODE_ROOT]",
                        raw.get("CLAUDE_CODE_ROOT") or default_code_root(), mode)
@@ -758,7 +758,7 @@ def ready_card():
         say(f"  - {_C['G']}organism status{_C['X']}   see your background jobs (or that none are scheduled)")
     if os.path.exists(pairings_path()):
         say(f"  - {_C['G']}organism check{_C['X']}    refresh the doc check's status tables now")
-    say(f"  - after a real coding session, run {_C['G']}/handoff{_C['X']} inside Claude Code:")
+    say(f"  - after a real coding session, run {_C['G']}/harvest{_C['X']} inside Claude Code:")
     say("    it writes down what you decided, and your next session starts from it.")
     say("")
     say(f"Something wrong later? {_C['G']}organism doctor{_C['X']}. Everything else: README.md")

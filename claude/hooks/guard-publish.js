@@ -125,7 +125,7 @@ function logLine(text) {
 }
 function internalErrorAllow(e) {
   // --scan only: it fails open, like its caller expects (a record check that cannot
-  // run must not stop /handoff), but never silently.
+  // run must not stop /harvest), but never silently.
   try {
     process.stderr.write(`guard-publish: internal error (${e && e.message ? e.message : String(e)}): allowing (fail-open)\n`);
   } catch (_) {}
@@ -173,8 +173,8 @@ if (process.argv[2] === '--status') {
   process.exit(0);
 }
 
-// ---- --scan <file>...: record check before /handoff commits ----
-// handoff.md step 1g runs this on the ADR files + CLAUDE.md it is about to commit.
+// ---- --scan <file>...: record check before /harvest commits ----
+// Step 1g of the harvest skill runs this on the ADR files + CLAUDE.md it is about to commit.
 // Same denylist, same case-insensitive substring match, same per-repo exemptions
 // (root = the first file's git toplevel). Exit 2 on a hit, term and file on stderr,
 // unmasked line in the local log, no phone alert (the user is at the terminal and
@@ -211,7 +211,7 @@ if (process.argv[2] === '--scan') {
       process.stderr.write(
         `🚫 guard-publish --scan: confidential term(s) in the records about to be committed:\n  ${hits.join('\n  ')}\n` +
         `These are on your private "Confidential Terms" denylist. Do NOT commit this. ` +
-        `Rephrase the record (handoff.md step 1d), or, if the term is this repo's own codename, add a per-repo exemption.\n`);
+        `Rephrase the record (step 1d of the harvest skill), or, if the term is this repo's own codename, add a per-repo exemption.\n`);
       process.exit(2);
     }
     process.stdout.write(`guard-publish --scan: clean (${read} file(s), ${active.length} term(s))\n`);

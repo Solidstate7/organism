@@ -89,9 +89,9 @@ def populate(sb):
     write_note(sb.sessions, 3, after, "deep but uncovered",
                project_dir=os.path.join(sb.root, "deep", "er"))
     write_note(sb.sessions, 4, after, "nightly job", project_dir=sb.root, headless="sdk-cli")
-    # The session that ran /handoff: its last turn STARTED before the brief was
+    # The session that ran /harvest: its last turn STARTED before the brief was
     # written, but its note landed after (mtime > since).
-    write_note(sb.sessions, 5, sb.since - 120, "/handoff", project_dir=sb.root,
+    write_note(sb.sessions, 5, sb.since - 120, "/harvest", project_dir=sb.root,
                mtime=sb.since + 30)
     write_note(sb.sessions, 6, after, "the current session", project_dir=sb.root)
     write_note(sb.sessions, 7, after, "another project", project_dir=os.path.join(sb.home, "other"))

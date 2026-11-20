@@ -1,6 +1,6 @@
 # RETRO mode: reconstruct decisions made before Organism was installed
 
-Read this file only when step 0 of `/handoff` made the retro offer and the user accepted, or when `$ARGUMENTS` contains `--retro`. Everything in SKILL.md still applies; this adds the reconstruction pass, R1 to R4, which runs before job 2.
+Read this file only when step 0 of `/harvest` made the retro offer and the user accepted, or when `$ARGUMENTS` contains `--retro`. Everything in SKILL.md still applies; this adds the reconstruction pass, R1 to R4, which runs before job 2.
 
 Use when a project predates the harvest loop: decisions live in code/git/old sessions but not in ADRs.
 

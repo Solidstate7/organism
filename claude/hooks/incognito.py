@@ -6,7 +6,7 @@ in one session never affects any other concurrent session. While on, this
 session's turns are not mirrored to _claude-live; the on→off span is sealed as an
 excluded window so those turns stay out even after the session file regenerates
 from the full transcript. Only the mirror is affected: the raw transcript, the
-reconciler, and /handoff are untouched.
+reconciler, and /harvest are untouched.
 
 `purge` is the retroactive scrub: it seals a window covering the whole session
 so far ([0, now]) AND goes active, so every turn (past and future) stays out

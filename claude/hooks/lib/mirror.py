@@ -741,7 +741,7 @@ def sessions_since(root, since, exclude=None, home=None, transcripts=None):
         if marks:
             ts = marks[-1].group(1)
             # Judge by when the LAST TURN STARTED, not the note's mtime: the session
-            # that ran /handoff writes the brief mid-turn and its note lands after, so
+            # that ran /harvest writes the brief mid-turn and its note lands after, so
             # an mtime test would list the very session the brief came from.
             try:
                 if datetime.datetime.strptime(ts, TS_FMT).timestamp() <= since:

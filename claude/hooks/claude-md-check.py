@@ -19,7 +19,7 @@ import sys, os, re
 BACKTICK = re.compile(r"`([^`\n]+)`")
 
 
-# /handoff, /incognito, and plugin-namespaced /organism:handoff: commands, not paths
+# /harvest, /incognito, and plugin-namespaced /organism:harvest: commands, not paths
 SLASH_CMD = re.compile(r"^/[A-Za-z][\w-]*(?::[A-Za-z][\w-]*)?$")
 
 

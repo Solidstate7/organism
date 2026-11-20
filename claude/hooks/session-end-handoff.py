@@ -6,7 +6,7 @@ raise that, so the slow work (a reconcile trigger and a final mirror pass) runs 
 session-end-worker.py, started in its own session so neither the hook's cancellation
 nor a closing terminal stops it. The payload goes to the worker on stdin.
 
-It never writes HANDOFF.md. The "where we are" note has one writer, /handoff. (The
+It never writes HANDOFF.md. The "where we are" note has one writer, /harvest. (The
 file name predates that rule and stays, so existing settings entries keep working.)
 
 Reads SessionEnd JSON on stdin (transcript_path, session_id, cwd, reason).

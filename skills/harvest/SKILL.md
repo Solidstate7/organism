@@ -1,5 +1,5 @@
 ---
-name: handoff
+name: harvest
 description: Harvest decisions into ADRs (Obsidian-native in a vault) + a CLAUDE.md index, commit them, then rewrite HANDOFF.md. --retro reconstructs PRE-harness decisions from git + session transcripts.
 argument-hint: [--retro] [optional focus note]
 disable-model-invocation: true
@@ -13,11 +13,11 @@ Two jobs, in order, both at the CURRENT project's root:
 
 Job 1 first, then job 2. Only steps 0.4, 0.5, 1g, 1g-bis, 1.5, 1.6 and the retro links touch git; 1.6 (the push) runs only when the user's note asks for one. The loop itself is disk-based and never needs a commit.
 
-Helper commands are `organism <verb>` (`adr-link`, `adr-index`, `handoff-state`, `guard-scan`); if `organism` is not on PATH, use `~/.local/bin/organism`. The command asks at most two questions: the retro offer (step 0) and the byproduct check (step 0.5). Running `/handoff` is the approval; never ask for one.
+Helper commands are `organism <verb>` (`adr-link`, `adr-index`, `handoff-state`, `guard-scan`); if `organism` is not on PATH, use `~/.local/bin/organism`. The command asks at most two questions: the retro offer (step 0) and the byproduct check (step 0.5). Running `/harvest` is the approval; never ask for one.
 
 ## 0. Root, state, mode
 
-Run `organism handoff-state`. Its `root` is `<root>`: the git top level, else the vault root (the configured vault, or the nearest folder above the start folder holding `.obsidian` or `docs/adr`), and `root_kind` says which (`git`, `vault`, `none`). `root_kind=none` means neither: say "no repository and no vault above this folder; /handoff writes nothing here" and stop. Everything below is relative to `<root>`, never a subdirectory, never `$HOME`.
+Run `organism handoff-state`. Its `root` is `<root>`: the git top level, else the vault root (the configured vault, or the nearest folder above the start folder holding `.obsidian` or `docs/adr`), and `root_kind` says which (`git`, `vault`, `none`). `root_kind=none` means neither: say "no repository and no vault above this folder; /harvest writes nothing here" and stop. Everything below is relative to `<root>`, never a subdirectory, never `$HOME`.
 
 Run `organism adr-link state` (it classifies a non-git root honestly) and act on its keys:
 
@@ -25,7 +25,7 @@ Run `organism adr-link state` (it classifies a non-git root honestly) and act on
 - `decision_repo=no_git`: ADRs exist, no git (a synced vault). Harvest normally (1a to 1f-bis: records, index, MOC); skip every git step (0.4, 0.5, 1g, 1g-bis, 1.5, 1.6).
 - `decision_repo=greenfield`: a git repo with no ADR dir yet. Harvest; 1a creates the dir. Honour `dirty_work` in 0.5.
 - `decision_repo=yes`: the full flow.
-- `retro_backlog=yes` with `retro_checkpoint=none`: history holds decision-shaped work no record covers. Offer once, in one line: "this project has ~N unrecorded historical decisions; reconstruct them now? (y/N)". On yes, or when `$ARGUMENTS` contains `--retro` (any extra text scopes it), Read `RETRO.md` next to this SKILL.md (the skill's base directory; from a clone, `~/.organism/skills/handoff/RETRO.md`) and run R1 to R4 before job 2. On no, or when R1 finds nothing, `organism adr-link retro-checkpoint set` so the offer stops (step 1.5 commits the marker). A set checkpoint means silence: retro is a one-time catch-up, never a recurring prompt.
+- `retro_backlog=yes` with `retro_checkpoint=none`: history holds decision-shaped work no record covers. Offer once, in one line: "this project has ~N unrecorded historical decisions; reconstruct them now? (y/N)". On yes, or when `$ARGUMENTS` contains `--retro` (any extra text scopes it), Read `RETRO.md` next to this SKILL.md (the skill's base directory; from a clone, `~/.organism/skills/harvest/RETRO.md`) and run R1 to R4 before job 2. On no, or when R1 finds nothing, `organism adr-link retro-checkpoint set` so the offer stops (step 1.5 commits the marker). A set checkpoint means silence: retro is a one-time catch-up, never a recurring prompt.
 - `uncovered=N>0`: note it in the brief's open threads. `dirty_work=N>0`: step 0.5 runs.
 
 Show the user conclusions, never the raw keys.
@@ -44,9 +44,9 @@ The record must land in git AFTER the work it describes. 1g stages only `CLAUDE.
 
 If `dirty_work>0`:
 
-1. `git status --short`: the session's uncommitted work (handoff has written nothing yet).
+1. `git status --short`: the session's uncommitted work (`/harvest` has written nothing yet).
 2. **Byproduct check.** `organism adr-link ignore-scan` lists directories of likely generated files as `<dir>  <count>  <reason>`. For each one the user confirms is byproduct: add it to `.gitignore`, `git rm -r --cached <dir>` if tracked, and commit that separately first: `git commit -m "chore: stop tracking generated <dir>" -m "ADR: none"`. Empty output: nothing to do.
-3. **Safety gate.** Scan the list for untracked secrets (`.env`, `*.key`, `*.pem`, token or credential files), large binaries or build artifacts outside `.gitignore`, and files plainly unrelated to this session. **A secret stops the run:** commit nothing, write no record and no brief, and report each secret's path (never its contents) so the user can remove or ignore it and run `/handoff` again. Binaries, artifacts and unrelated files are left out (`git add -A -- <root> ':(exclude)<root>/<path>'` for each; `<root>`, not `.`, so a run from a subfolder stages the whole tree) and listed in the 1f-bis draft. Ask nothing here.
+3. **Safety gate.** Scan the list for untracked secrets (`.env`, `*.key`, `*.pem`, token or credential files), large binaries or build artifacts outside `.gitignore`, and files plainly unrelated to this session. **A secret stops the run:** commit nothing, write no record and no brief, and report each secret's path (never its contents) so the user can remove or ignore it and run `/harvest` again. Binaries, artifacts and unrelated files are left out (`git add -A -- <root> ':(exclude)<root>/<path>'` for each; `<root>`, not `.`, so a run from a subfolder stages the whole tree) and listed in the 1f-bis draft. Ask nothing here.
 4. Author a real conventional-commit message from the session (subject, body bullets if several features); never a generic "wip".
 5. One implementation commit, before the record: `git add -A` (with the exclusions), then `git commit -m "<summary>" -m "ADR: none"`. `ADR: none` because the number is minted in step 1; 1g-bis links this commit afterwards. One commit per decision is fine when the mapping is obvious, but one honest bulk commit is the floor; never block on slicing.
 
@@ -54,7 +54,7 @@ If `dirty_work>0`:
 
 Scan THIS conversation for genuine architectural or technical decisions made this session: a choice with a rationale and a consequence (a format, protocol, dependency or structure pick, "X over Y because Z", a trade-off deliberately accepted). `$ARGUMENTS` is a candidate too. Ignore routine edits, bug fixes and discussion that never resolved. **If nothing qualifies, skip all of step 1**: never invent decisions, never create empty dirs or files.
 
-**Scope test.** A candidate qualifies only if it is about *this* project, the repo at `<root>`: its code, tooling, data, what it commits, runs or publishes. A side project's design, a personal errand, a tool choice for another repo are real decisions that belong elsewhere; recording them here puts another project's (or the user's private) context into this repo's committed records. Do not write a record for them: list them in the 1f-bis draft under "Decided elsewhere, not recorded here", one line each (the decision and its project), so the user can run `/handoff` there. When unsure whether a decision is this project's, it is not: do less.
+**Scope test.** A candidate qualifies only if it is about *this* project, the repo at `<root>`: its code, tooling, data, what it commits, runs or publishes. A side project's design, a personal errand, a tool choice for another repo are real decisions that belong elsewhere; recording them here puts another project's (or the user's private) context into this repo's committed records. Do not write a record for them: list them in the 1f-bis draft under "Decided elsewhere, not recorded here", one line each (the decision and its project), so the user can run `/harvest` there. When unsure whether a decision is this project's, it is not: do less.
 
 ### 1a to 1c. Where the records live, and in what style
 
@@ -117,7 +117,7 @@ Read the existing brief to carry the standing backlog forward, then overwrite `<
 2. **Current status**: 2 to 4 sentences: what this session was about and the headline outcome.
 3. **What's live**: working surfaces and capabilities; carry forward, update only what changed.
 4. **Next / open threads**: concrete next steps and anything mid-flight, most actionable first; preserve the standing backlog. **Steps, not identifiers**: say what to do and where the details are (a vault note, a mail subject), never the account, case or order number, address, phone or money figure itself. The brief is gitignored, but it is synced and injected into every session started in this directory.
-5. **How to use this file**: regenerated by `/handoff` (which also commits the records and `CLAUDE.md`); injected at session start; gitignored local state; decisions live as committed records indexed from `CLAUDE.md`'s `## Decisions` (and, in a vault, `[[_decisions-moc]]`).
+5. **How to use this file**: regenerated by `/harvest` (which also commits the records and `CLAUDE.md`); injected at session start; gitignored local state; decisions live as committed records indexed from `CLAUDE.md`'s `## Decisions` (and, in a vault, `[[_decisions-moc]]`).
 
 **A quiet session is said, not skipped.** When the state shows `commits_since_brief=0` and `dirty=0` and step 1 recorded nothing, the report says in one line that the session wrote and decided nothing. The brief is still written: the pointer and the status change. The only runs that leave no brief are a secret stop (0.5) and a start outside a repo and a vault (0).
 
