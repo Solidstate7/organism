@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 520" width="840" height="520" role="img" aria-label="One main session sends orders to three agents and gets reports back. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 520" width="840" height="520" role="img" aria-label="One main session sends orders to three agents and gets reports back. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. The history records every start, stop, order and report.">
   <style>
     :root{--bg:#F3F5F7;--surface:#FFFFFF;--ink:#1B222B;--muted:#5B6773;--line:#C3CCD5;--ok:#1F8A5B;--warn:#B26A12;--accent:#2B5F9E;--opt:#7A6400;--opt-soft:#FFF1A8}
     @media (prefers-color-scheme:dark){:root{--bg:#14181D;--surface:#1C2229;--ink:#E6EAEE;--muted:#9AA6B2;--line:#3A4551;--ok:#4CC38A;--warn:#E0A24A;--accent:#7FB0E8;--opt:#EDD15A;--opt-soft:#36330F}}
@@ -78,8 +78,8 @@
   <text class="lbl" x="450" y="300">summon:</text>
   <text class="lbl" x="450" y="314">a new session starts from it</text>
 
-  <!-- the log -->
+  <!-- the history -->
   <rect class="box" x="20" y="444" width="800" height="56" rx="4"/>
-  <text class="t" x="36" y="466">Log</text>
+  <text class="t" x="36" y="466">History</text>
   <text class="s" x="36" y="484">hooks add a line for every start, stop, order and report, also for sessions you start by hand</text>
 </svg>

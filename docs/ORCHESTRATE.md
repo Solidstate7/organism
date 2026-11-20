@@ -3,7 +3,7 @@
 Some people run several Claude Code sessions at once, one for each repo, and send each one
 orders from a main session. `organism orchestrate` keeps that set of sessions in order. It knows
 which agents exist, whether each one is running, and how many times it has been restarted
-from its brief. Every step goes into a ledger, which you can read back later.
+from its brief. Every step goes into the history, which you can read back later.
 
 All of this is optional. Nothing here runs until you write a roster, the file that lists your agents.
 
@@ -18,14 +18,14 @@ An agent is one repo with one Claude Code session at a time. Its life has four s
    and then ends the session with `/exit`.
 4. The next `summon` starts a fresh session from that brief.
 
-![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](img/orchestrate.svg)
+![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. The history records every start, stop, order and report.](img/orchestrate.svg)
 
 Each fresh session is one generation. A long session fills its context and gets slower and
 less careful. Unsummoning it and summoning it again from a short brief gives you a clean session
 that still knows where the work stands.
 
 `claude --resume` is different: it reopens the same session with its old context. The
-ledger records it as a resume, not a new generation.
+history records it as a resume, not a new generation.
 
 ## The roster
 
@@ -53,7 +53,7 @@ The other fields are optional:
 | `model` | `opus` | Filled into `{model}` in the launch command. |
 | `effort` | `high` | Filled into `{effort}`. `summon --effort` overrides it once. |
 | `brief` | `<repo>/HANDOFF.md` | The file that `/harvest` must rewrite. |
-| `handoff` | `true` | `false` closes the agent without `/harvest`, and the ledger says so. |
+| `handoff` | `true` | `false` closes the agent without `/harvest`, and the history says so. |
 | `role` | the first line of the repo's `CLAUDE.md` | Shown by `orchestrate roster`. |
 | `launch` | the roster's `launch` | A launch command for this agent only. |
 
@@ -70,7 +70,7 @@ When an agent's repo holds another agent's repo, the deeper one wins.
 organism orchestrate roster
 organism orchestrate summon <name> [--effort E] [--dry]
 organism orchestrate unsummon <name> [--no-handoff] [--dry]
-organism orchestrate ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
+organism orchestrate history [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
 ```
 
 The old names `organism fleet`, `list`, `up` and `down` still work.
@@ -81,10 +81,10 @@ its brief and its role. The state is one of these:
 - **live as `<session name>`**: a session is running in the repo now.
 - **harvested**: the last session rewrote the brief before it ended.
 - **closed**: the last session ended without rewriting the brief.
-- **never summoned**: the ledger has nothing for this agent.
+- **never summoned**: the history has nothing for this agent.
 
 **`orchestrate summon`** starts the agent's session. It says first whether the agent is new
-or starts again from its brief (a resummon in the ledger), which generation it will be, and which brief the session starts from. If the
+or starts again from its brief (a resummon in the history), which generation it will be, and which brief the session starts from. If the
 agent is already live, it says where and starts nothing. When Claude Code asks whether
 you trust the repo's folder, `summon` answers yes, since the roster already names that repo.
 It answers no other prompt.
@@ -119,11 +119,11 @@ command line called `hc`. Without it:
   run it.
 - `unsummon` refuses. Do it by hand: run `/harvest` in the session, then `/exit`.
 
-The ledger works the same either way, because hooks write it, not the commands.
+The history works the same either way, because hooks write it, not the commands.
 
-## The ledger
+## The history
 
-The ledger is a file of JSON lines at `~/.claude/state/fleet-ledger.jsonl` (set
+The history is a file of JSON lines at `~/.claude/state/fleet-ledger.jsonl` (set
 `ORGANISM_FLEET_LEDGER` to move it). Lines are only ever added, and only you can read the
 file. Three hooks write it, so sessions you start by hand are recorded too:
 
@@ -139,15 +139,15 @@ file. Three hooks write it, so sessions you start by hand are recorded too:
 | | `message` | A message from one agent to another. |
 
 Only the first line of a message is kept. It goes through the same secret redaction as the
-session notes and is cut at 200 characters. If redaction can't run, the ledger stores a note saying the line
+session notes and is cut at 200 characters. If redaction can't run, the history stores a note saying the line
 was not recorded.
 
 Only interactive sessions count. A headless `claude -p` run in an agent's repo is a job,
-and the ledger leaves it out, along with its messages. A message to a subagent or
-teammate inside one session (`main`, or an agent's id) is not recorded either: the ledger
+and the history leaves it out, along with its messages. A message to a subagent or
+teammate inside one session (`main`, or an agent's id) is not recorded either: the history
 keeps messages sent to an address, a live session's name or an agent in the roster.
 
-`/clear` starts a new session id, so the ledger records the old one's end (`harvest` or
+`/clear` starts a new session id, so the history records the old one's end (`harvest` or
 `close`) and a `resummon` for the new one, marked `source: clear`. Compacting keeps the
 session and records nothing. If the hook is wired twice (the plugin and an old line in
 `settings.json`), each event is still written once.
@@ -155,9 +155,9 @@ session and records nothing. If the hook is wired twice (the plugin and an old l
 Orders and reports are recorded where they are sent, not where they arrive. A message
 that arrives while a session is busy reaches it in the middle of a turn, where no hook
 sees it. The send is always one tool call, which a hook can see. Because of this, a message
-sent by something other than a Claude Code session is not in the ledger.
+sent by something other than a Claude Code session is not in the history.
 
-**`orchestrate ledger`** prints the ledger, one event per line. `--since` takes `3d`, `12h` or a
+**`orchestrate history`** prints the history, one event per line. `--since` takes `3d`, `12h` or a
 date, `--agent` keeps one agent, and `--json` prints the raw lines. `--md PATH` writes the
 events as a Markdown table to a file you name, for example in your vault. It writes a
 marker on the first line and refuses to replace a file without one, so it never replaces

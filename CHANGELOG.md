@@ -8,7 +8,7 @@ All notable changes to Organism are listed here. The format follows
 
 ### Added
 
-- A diagram of one main session with three agents, their briefs and the log, in the
+- A diagram of one main session with three agents, their briefs and the history, in the
   README and in [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md).
 - `organism adr-link link-session --list` prints the work commits since the last harvest,
   each with the record it is linked to or `none`. It writes nothing.
@@ -22,8 +22,8 @@ All notable changes to Organism are listed here. The format follows
   the old names still work.
 - `docs/FLEET.md` is now `docs/ORCHESTRATE.md`.
 - These names stay as they were: the roster `~/.claude/state/organism-fleet.json`, the
-  log `~/.claude/state/fleet-ledger.jsonl`, the `ORGANISM_FLEET_*` variables, and the
-  events in the log.
+  history file `~/.claude/state/fleet-ledger.jsonl`, the `ORGANISM_FLEET_*` variables,
+  and the events in the history.
 - The README no longer lists commands. It says what to ask Claude for, and the commands
   are in [docs/COMMANDS.md](docs/COMMANDS.md) for the agent that runs them. The two
   install lines stay.
@@ -36,8 +36,10 @@ All notable changes to Organism are listed here. The format follows
   Two choices in the same commits become one record.
 - The harvest draft shows each record's commits and who made the choice. It lists the
   commits that belong to no record under "Changed without a decision".
-- A table written by `ledger --md` has a new first line and the heading "Ledger". A table
-  with the old first line is still replaced without `--force`.
+- `organism orchestrate ledger` is now `organism orchestrate history`, and the docs call
+  the log of events the history. The old name still works.
+- A table written by `history --md` has a new first line and the heading "History". A
+  table with an older first line is still replaced without `--force`.
 
 ## [0.4.0] - 2026-11-20
 

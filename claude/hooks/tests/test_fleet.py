@@ -12,7 +12,7 @@
     in-process recipients (main, a subagent) and headless senders add nothing; one tool
     call is recorded once however many times the hook runs
   - orchestrate roster: live, harvested, closed, never summoned, generations
-  - orchestrate ledger: --since, --agent, --json, --md (never over a file it didn't write)
+  - orchestrate history: --since, --agent, --json, --md (never over a file it didn't write)
   - summon without herdr-core prints the command (shell-quoted; a bad template is named);
     down without it refuses; down --dry plans
   - down against a fake hc: it picks the session in the agent's terminal, stops on a
@@ -319,7 +319,7 @@ def test_messages():
 
 
 def test_list_and_ledger():
-    print("cli: orchestrate roster and orchestrate ledger")
+    print("cli: orchestrate roster and orchestrate history")
     b = Box()
     b.session_file(FAKE_PID, sessionId="x", name="me")
     b.brief("web", "w\n")
@@ -350,35 +350,48 @@ def test_list_and_ledger():
     check("an agent with no events: never summoned", "never summoned" in b.run("roster").stdout)
     b.write_config()
 
-    r = b.run("ledger")
-    check("ledger prints every event and skips the torn line",
+    r = b.run("history")
+    check("history prints every event and skips the torn line",
           r.returncode == 0 and len(r.stdout.splitlines()) == len(b.events()) and "old" in r.stdout)
-    r = b.run("ledger", "--since", "1h")
+    r = b.run("history", "--since", "1h")
     check("--since 1h drops the old event", "old" not in r.stdout and "harvest" in r.stdout)
-    r = b.run("ledger", "--since", "2025-12-31")
+    r = b.run("history", "--since", "2025-12-31")
     check("--since a date keeps it", "old" in r.stdout)
-    r = b.run("ledger", "--since", "soon")
+    r = b.run("history", "--since", "soon")
     check("--since nonsense is refused", r.returncode != 0 and "--since" in r.stderr)
-    r = b.run("ledger", "--agent", "notes", "--json")
+    r = b.run("history", "--agent", "notes", "--json")
     lines = [json.loads(l) for l in r.stdout.splitlines()]
     check("--agent notes --json: only notes events, as JSON",
           lines and all(e.get("agent") == "notes" for e in lines) and [e["event"] for e in lines] == ["summon", "close"])
-    md = os.path.join(b.home, "Ledger.md")
-    r = b.run("ledger", "--md", md)
+    md = os.path.join(b.home, "History.md")
+    r = b.run("history", "--md", md)
     with open(md) as fh:
         text = fh.read()
     check("--md writes a table with the mark", r.returncode == 0 and text.startswith("<!-- written by organism orchestrate")
           and "| When | Event | Agent | What |" in text and "continues w1" in text)
-    b.run("ledger", "--md", md)
+    r = b.run("history", "--md", md)
     check("…and rewrites its own file", r.returncode == 0)
+    check("the table's heading is History", "# History" in text)
+    for old in ("<!-- written by organism orchestrate ledger; rewritten on each run -->",
+                "<!-- written by organism fleet ledger; rewritten on each run -->"):
+        with open(md, "w") as fh:
+            fh.write(old + "\n# Ledger\n")
+        r = b.run("history", "--md", md)
+        with open(md) as fh:
+            new = fh.read()
+        check("a table with an older first line is replaced without --force",
+              r.returncode == 0 and new.startswith("<!-- written by organism orchestrate history"))
+    r = b.run("ledger")
+    check("the old name ledger still works",
+          r.returncode == 0 and len(r.stdout.splitlines()) == len(b.events()))
     other = os.path.join(b.home, "Mine.md")
     with open(other, "w") as fh:
         fh.write("my notes\n")
-    r = b.run("ledger", "--md", other)
+    r = b.run("history", "--md", other)
     with open(other) as fh:
         kept = fh.read()
     check("--md never replaces a file it didn't write", r.returncode != 0 and kept == "my notes\n")
-    r = b.run("ledger", "--md", other, "--force")
+    r = b.run("history", "--md", other, "--force")
     check("…unless --force", r.returncode == 0)
     b.done()
 

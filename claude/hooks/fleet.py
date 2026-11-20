@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""organism orchestrate: run a set of Claude Code sessions, one per repo, and keep a ledger of their lives.
+"""organism orchestrate: run a set of Claude Code sessions, one per repo, and keep a history of their lives.
 
   organism orchestrate roster                      every agent: lifecycle state, generations, brief date
   organism orchestrate summon <name> [--effort E] [--dry]
@@ -7,8 +7,8 @@
                                                    (from its brief when it has lived before)
   organism orchestrate unsummon <name> [--no-handoff] [--dry]
                                                    /harvest writes the brief, then /exit
-  organism orchestrate ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
-                                                   the ledger: every summon, order, report and harvest
+  organism orchestrate history [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
+                                                   the history: every summon, order, report and harvest
 
 `organism fleet`, `list`, `up` and `down` are the old names of `orchestrate`, `roster`,
 `summon` and `unsummon`. They still work.
@@ -58,8 +58,9 @@ HOME = os.environ.get("HOME") or os.path.expanduser("~")
 DEFAULT_LAUNCH = "claude --model {model} --effort {effort}"
 LIFE = ("summon", "resummon", "resume", "harvest", "close")
 LINE_MAX = 200
-MD_MARK = "<!-- written by organism orchestrate ledger; rewritten on each run -->"
-MD_MARK_OLD = "<!-- written by organism fleet ledger; rewritten on each run -->"   # the mark's old wording
+MD_MARK = "<!-- written by organism orchestrate history; rewritten on each run -->"
+MD_MARKS_OLD = ("<!-- written by organism orchestrate ledger; rewritten on each run -->",   # the mark's old wordings
+                "<!-- written by organism fleet ledger; rewritten on each run -->")
 NAME_RE = r"[A-Za-z0-9][A-Za-z0-9._-]*"
 STR_FIELDS = ("repo", "brief", "model", "effort", "launch", "role")
 
@@ -598,7 +599,7 @@ def cmd_up(cfg, name, effort=None, dry=False):
         print(("herdr-core (hc) is not installed; start it yourself:" if hd is None else "would run:")
               + f"\n  cd {shlex.quote(a['repo'])} && {line}")
         if hd is None:
-            print("The ledger records the start when the session opens.")
+            print("The history records the start when the session opens.")
         return 0
     print(plan)
     shell = cfg.get("shell") or os.environ.get("SHELL") or "/bin/sh"
@@ -626,8 +627,8 @@ def cmd_up(cfg, name, effort=None, dry=False):
         s = live_session(cfg, name)
         if s and hd.box(name) is not None:
             ev = next((e for e in reversed(history(name)) if e.get("session") == s.get("sessionId")), None)
-            led = (f"ledger: {ev['event']}, generation {ev.get('generation', '?')}" if ev
-                   else "ledger: no event yet (are the Organism hooks loaded?)")
+            led = (f"history: {ev['event']}, generation {ev.get('generation', '?')}" if ev
+                   else "history: no event yet (are the Organism hooks loaded?)")
             print(f"summoned: {s.get('name')}  session {s.get('sessionId')}  socket {s.get('messagingSocketPath')}  {led}")
             return 0
     sys.exit(f"{name} not ready after 3 minutes; screen tail:\n" + hd.screen(name)[-800:])
@@ -696,7 +697,7 @@ def cmd_down(cfg, name, handoff=True, dry=False):
     hd.sh("rm", name)
     ev = next((e for e in reversed(history(name)) if e.get("session") == s.get("sessionId")
                and e["event"] in ("harvest", "close")), None)
-    print(f"unsummoned: {s.get('name')} closed; " + (f"ledger: {ev['event']}" if ev else "ledger: no event (are the Organism hooks loaded?)"))
+    print(f"unsummoned: {s.get('name')} closed; " + (f"history: {ev['event']}" if ev else "history: no event (are the Organism hooks loaded?)"))
     return 0
 
 
@@ -756,12 +757,12 @@ def cmd_ledger(args):
         path = os.path.expanduser(args[i])
         try:
             with open(path, encoding="utf-8") as fh:
-                ours = fh.readline().strip() in (MD_MARK, MD_MARK_OLD)
+                ours = fh.readline().strip() in (MD_MARK,) + MD_MARKS_OLD
         except FileNotFoundError:
             ours = True
         if not ours and "--force" not in args:
-            sys.exit(f"organism orchestrate: {path} exists and was not written by orchestrate ledger; --force replaces it")
-        out = [MD_MARK, "", "# Ledger", "", f"{len(evs)} events, written {now()[:16].replace('T', ' ')}.", "",
+            sys.exit(f"organism orchestrate: {path} exists and was not written by orchestrate history; --force replaces it")
+        out = [MD_MARK, "", "# History", "", f"{len(evs)} events, written {now()[:16].replace('T', ' ')}.", "",
                "| When | Event | Agent | What |", "|---|---|---|---|"]
         for e in evs:
             cell = describe(e).replace("|", "\\|")
@@ -773,7 +774,7 @@ def cmd_ledger(args):
         print(f"organism orchestrate: {len(evs)} events written to {path}")
         return 0
     if not evs:
-        print("organism orchestrate: the ledger has no events" + (" in that range" if "--since" in args else ""))
+        print("organism orchestrate: the history has no events" + (" in that range" if "--since" in args else ""))
     for e in evs:
         print(f"{e.get('ts', '')[:16].replace('T', ' ')}  {e['event']:8}  {(e.get('agent') or '-'):16}  {describe(e)}")
     return 0
@@ -785,7 +786,7 @@ def main(a):
         return 0
     if a[0] == "hook":
         return cmd_hook()
-    if a[0] == "ledger":
+    if a[0] in ("history", "ledger"):
         return cmd_ledger(a[1:])
     cfg = load_config()
     flag = lambda f: f in a

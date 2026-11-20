@@ -194,7 +194,7 @@ Some people run one Claude Code session per repo and send each one orders from a
 session. Organism calls each repo with its session an agent and lists them in a roster,
 a JSON file that you write. Without a roster, none of this runs.
 
-![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs a harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](docs/img/orchestrate.svg)
+![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs a harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. The history records every start, stop, order and report.](docs/img/orchestrate.svg)
 
 You ask the main session for four things:
 
@@ -203,14 +203,14 @@ You ask the main session for four things:
 | see the roster | It shows each agent: running, stopped after a harvest, stopped without one, or never started. It also shows how many sessions the agent has had. |
 | start an agent | A new session starts in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
 | stop an agent | The agent's session runs a harvest. Once the brief is rewritten, the session ends. |
-| see the log | It shows when each session started and stopped, and the first line of each order and report. |
+| see the history | It shows when each session started and stopped, and the first line of each order and report. |
 
 A long session fills its context and gets slower and less careful. A new session that
 starts from a short brief has a clean context and still knows where the work stands.
 `claude --resume` is different, because it reopens the old session with all of its
 context.
 
-Hooks write the log, so a session that you start by hand is in it too. To open and
+Hooks write the history, so a session that you start by hand is in it too. To open and
 type into terminals, Organism needs herdr-core, a terminal manager. Without it, starting
 an agent prints what to run in the repo, and you close the session yourself. If the
 harvest asks for a permission or asks a question, the stop waits and leaves the answer
