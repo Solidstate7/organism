@@ -8,15 +8,16 @@ Organism is a [Claude Code](https://claude.com/claude-code) plugin that keeps th
 behind the code that your agent writes. It does three things:
 
 1. It saves every session to your notes folder as readable markdown, as it happens.
-2. At the end of a session, `/handoff` writes each decision as a dated record in the repo
-   and links it to the commits that carry it out.
+2. At the end of a session, `/handoff` writes each decision as a dated record in the repo.
+   It links each record to the commits that carry it out.
 3. The next session starts with a short "where we are" brief, loaded automatically.
 
-It's plain files, a few hooks and a few scripts. No server, no database, no vector
+`organism fleet` is for running several sessions at once, one per repo. It starts each
+session, stops it after `/handoff`, and logs both. See
+[Running several sessions](#running-several-sessions).
+
+Organism is plain files, a few hooks and a few scripts. No server, no database, no vector
 store: everything opens in a text editor and lives in git or in your own folder.
-Organism doesn't make agents smarter. It keeps a record of your part of the work. If you
-run several sessions at once, the optional [fleet](docs/FLEET.md) commands also start and
-stop them and keep a log of each one.
 
 ## Install
 
@@ -36,7 +37,17 @@ somewhere else, tell it the path. Until a vault is set, session notes stay off. 
 works from the start in any git repo, and anywhere inside the vault once one is set.
 
 After that, the only habit is running `/handoff` at the end of a session that made a
-decision. The hooks do the rest. Update or remove Organism with `/plugin`.
+decision. The hooks do the rest.
+
+To update, run these two commands and restart Claude Code. A session that is already
+open keeps the old version.
+
+```sh
+claude plugin marketplace update organism
+claude plugin update organism@organism
+```
+
+To remove Organism, use `/plugin`.
 
 ## Why
 
@@ -98,10 +109,16 @@ Only `/handoff` writes the brief. If you skip a run, the next session still gets
 brief as you left it. It also gets links to the saved notes of the sessions that ran
 after it.
 
+The brief states facts about the repo, so `/handoff` checks them. Before writing, it
+reads the branch, the recent commits and what has been pushed. After writing, it checks
+the new brief against them. A commit the brief names but the repo doesn't have, or a
+commit called pushed that isn't, is reported to you. So is an open item the old brief
+had and the new one dropped.
+
 ### What it won't do
 
 - It writes only the records, the index, the brief and `.gitignore`. In a vault it also
-  writes a page that lists every record, and after a rebuild of old history it writes a
+  writes a page that lists every record. After a rebuild of old history, it writes a
   marker file in the records folder. It never edits code.
 - It commits on the current branch and never pushes unless you ask for a push in your
   note. Inside a vault but outside a git repository it writes the records and the brief at
@@ -110,8 +127,9 @@ after it.
   the draft and left for that project's own run.
 - Records describe situations, never account numbers, addresses or names. If the work
   contains a secret, the run stops.
-- It asks at most two questions (whether to rebuild old history, and whether to gitignore
-  generated data), and never asks for approval: running the command is the approval.
+- It asks at most two questions: whether to rebuild old history, and whether to
+  gitignore generated data. It never asks for approval, because running the command is
+  the approval.
 - A session with no decision produces only the brief.
 
 ### Running it
@@ -156,7 +174,11 @@ connector call that sends.
 |---|---|---|
 | `latest.md` | The turn that just finished, in full, then a table of the 30 most recent sessions | You want to see what just happened. Pin it in Obsidian. |
 | `sessions/<id>.md` | One session, every turn, rebuilt from the transcript after each reply | You want to see how you got here. |
-| `~/.claude/mirror-archive/sessions/<id>.md` | The full note of a session whose vault copy passed 300 KB; the vault copy keeps the newest turns and names this file in its header | A long session's early turns, which the vault copy no longer shows. Obsidian cannot index multi-megabyte notes, so the full text stays outside the vault. |
+| `~/.claude/mirror-archive/sessions/<id>.md` | The full note of a long session, outside the vault | You want the early turns of a session over 300 KB. |
+
+A note in the vault stops growing at 300 KB, because Obsidian can't open a vault that
+holds notes of several megabytes. Past that size, the vault copy keeps the newest turns,
+and its first line names the full note in `~/.claude/mirror-archive`.
 
 Common secrets (API keys, tokens, private keys, passwords in URLs) are redacted before
 anything is written. This is best effort, not a guarantee. A project can opt out with an
@@ -166,6 +188,31 @@ a stretch of work out of the notes. `/incognito purge` deletes what the current 
 has saved so far and stops saving until `/incognito off`.
 [docs/SESSION-NOTES.md](docs/SESSION-NOTES.md) shows the format and lists exactly what is
 copied.
+
+## Running several sessions
+
+Some people run one Claude Code session per repo and send each one orders from a main
+session. Organism calls each repo with its session an agent and lists them in a roster,
+a JSON file that you write. Without a roster, none of this runs.
+
+| Command | What it does |
+|---|---|
+| `organism fleet list` | Shows each agent: running, stopped after `/handoff`, stopped without it, or never started. It also shows how many sessions the agent has had. |
+| `organism fleet up <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
+| `organism fleet down <name>` | Runs `/handoff` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
+| `organism fleet ledger` | Shows the log: when each session started and stopped, and the first line of each order and report. |
+
+A long session fills its context and gets slower and less careful. A new session that
+starts from a short brief has a clean context and still knows where the work stands.
+`claude --resume` is different, because it reopens the old session with all of its
+context.
+
+Hooks write the log, so a session that you start by hand is in it too. To open and
+type into terminals, `up` and `down` need herdr-core, a terminal manager. Without it,
+`up` prints the command to run in the repo, and you run `/handoff` and `/exit` yourself.
+If `/handoff` asks for a permission or asks a question, `down` stops and leaves the
+answer to you. Run the commands in your main session, because `organism` is on the path of Claude's
+shell. [docs/FLEET.md](docs/FLEET.md) explains the roster and every option.
 
 ## Commands
 
@@ -178,7 +225,7 @@ copied.
 `/organism:handoff` and `/organism:incognito` work too, in case another plugin also has a
 `/handoff`.
 
-These hooks run without any input from you:
+Five hooks run without any input from you:
 
 | Hook | When | What it does |
 |---|---|---|
@@ -186,7 +233,7 @@ These hooks run without any input from you:
 | Brief loading | Session start | Loads the nearest `HANDOFF.md` above the folder in which the session started, then lists the sessions that ran after it was written, each linked to its note. |
 | Session close | Session end | Adds the final exchange to the note, and runs the doc check if you turned it on. |
 | Publish guard | Before `Bash`, connector, web fetch and web search calls | Blocks a push, deploy, upload or web request that contains a term from your blocked list. |
-| Fleet ledger | Session start and end, and after `SendMessage` | Logs when an agent is summoned, harvested or resummoned, and the first line of each order and report. Does nothing until you write a fleet roster. |
+| Fleet log | Session start and end, and after `SendMessage` | Logs when an agent's session starts and stops, and the first line of each order and report. Does nothing until you write a roster. |
 
 The plugin also puts an `organism` command on the path of Claude's own shell, for
 maintenance. Ask Claude to run `organism help` for the list. `organism doctor` checks the
@@ -200,29 +247,23 @@ install.
 | git, python3 3.9 or later | Everything else. Standard library only, nothing to install with pip. |
 | macOS or Linux | CI runs the tests on both. Alerts show as notifications on macOS. |
 | node | The publish guard, once its list has terms. With terms and no node, the guard blocks every call that it checks until you install node or empty the list. |
+| herdr-core (optional) | `organism fleet up` and `down`, to open and type into terminals. |
 
 ## Optional extras
 
-Each one has a section in [docs/ADVANCED.md](docs/ADVANCED.md), except the fleet, which
-has its own page.
+Each one has a section in [docs/ADVANCED.md](docs/ADVANCED.md).
 
-- [The publish guard](docs/ADVANCED.md#the-publish-guard) blocks a push, deploy, upload
-  or web request that would send a term from your private list, such as a project
-  codename. For a push it reads every commit that the remote doesn't have yet. It guards
-  against accidents, not against someone who is set on leaking, and an empty list blocks
-  nothing.
+- [The publish guard](docs/ADVANCED.md#the-publish-guard) keeps a private list of terms,
+  such as project codenames. It blocks a push, deploy, upload or web request that would
+  send one of them. For a push it reads every commit that the remote doesn't have yet.
+  It guards against accidents, not against someone who is set on leaking, and an empty
+  list blocks nothing.
 - To use [more than one computer](docs/ADVANCED.md#more-than-one-computer), install the
   plugin on each and sync the vault. Your session notes follow you, and each is headed
   with the machine on which it ran. [docs/LINK-A-DEVICE.md](docs/LINK-A-DEVICE.md) has
   the steps.
 - [Alerts](docs/ADVANCED.md#alerts) go to a macOS notification, and to your phone if you
   set up a Telegram bot.
-- [The fleet](docs/FLEET.md) is for running several sessions at once, one per repo.
-  `organism fleet up` summons an agent, `down` harvests it (`/handoff`, then `/exit`), and
-  `up` on a harvested agent resummons it: a fresh session that starts from the brief.
-  `fleet list` shows each agent's state and how many generations it has had, and `fleet
-  ledger` shows the log. Starting and stopping sessions needs herdr-core. Without it,
-  `up` prints the command to run, and the log still works.
 - [The doc check](docs/ADVANCED.md#the-doc-check-experimental) is experimental and off
   until you turn it on in setup. It keeps a status table on one vault page per repo
   (latest commit, branch, uncommitted files, record count). It doesn't read your prose.
