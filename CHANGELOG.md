@@ -4,7 +4,7 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] - 2026-11-20
 
 ### Added
 
@@ -25,14 +25,14 @@ All notable changes to Organism are listed here. The format follows
   start, and its output goes to `~/.claude/state/orchestrate-tend.log`.
 - Five optional roster fields: `auto` (`false` turns the automatic closing off),
   `max_live`, `min_free_mb`, `session_mb` and `idle_minutes`.
-- The history records an `autoclose` event with the reason each time an agent is closed
-  to make room.
+- Each time an agent is closed to make room, the history records an `autoclose` event
+  with the reason.
 
 ### Changed
 
 - `organism fleet` is now `organism orchestrate`, `list` is now `roster`, `up` is now
-  `summon`, and `down` is now `unsummon`. The commands do the same work as before, and
-  the old names still work.
+  `summon`, and `down` is now `unsummon`. The commands do the same as before, and the
+  old names still work.
 - `docs/FLEET.md` is now `docs/ORCHESTRATE.md`.
 - These names stay as they were: the roster `~/.claude/state/organism-fleet.json`, the
   history file `~/.claude/state/fleet-ledger.jsonl`, the `ORGANISM_FLEET_*` variables,
@@ -44,9 +44,9 @@ All notable changes to Organism are listed here. The format follows
   session that made a decision.
 - A harvest that finds several decisions links each record to its own commits. Before, it
   linked every commit of the session to every new record.
-- The harvest decides what one decision is with three checks: the choice can be undone
-  alone, it has its own commits, and a choice with no commit yet still gets a record.
-  Two choices in the same commits become one record.
+- The harvest uses three checks to tell what one decision is. The choice can be undone
+  alone. It has its own commits. A choice with no commit yet still gets a record. Two
+  choices in the same commits become one record.
 - The harvest draft shows each record's commits and who made the choice. It lists the
   commits that belong to no record under "Changed without a decision".
 - `organism orchestrate ledger` is now `organism orchestrate history`, and the docs call
