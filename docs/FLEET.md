@@ -18,6 +18,8 @@ An agent is one repo with one Claude Code session at a time. Its life has four s
    ends the session.
 4. **Resummon.** The next fresh session starts from that brief.
 
+![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](img/fleet.svg)
+
 Each fresh session is one generation. A long session fills its context and gets slower and
 less careful. Harvesting it and resummoning from a short brief gives you a clean session
 that still knows where the work stands.

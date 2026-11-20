@@ -195,6 +195,8 @@ Some people run one Claude Code session per repo and send each one orders from a
 session. Organism calls each repo with its session an agent and lists them in a roster,
 a JSON file that you write. Without a roster, none of this runs.
 
+![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](docs/img/fleet.svg)
+
 | Command | What it does |
 |---|---|
 | `organism fleet list` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
