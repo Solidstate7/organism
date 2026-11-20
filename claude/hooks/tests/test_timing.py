@@ -112,9 +112,15 @@ def test_render():
                        capture_output=True, timeout=600)
     took = time.time() - t0
     print("  . rendered %d turns (%.1f MB of transcript) in %.2f s" % (TURNS, size / 1e6, took))
+    # A note over the cap keeps only its newest turns in the vault; the full render goes to
+    # the archive outside it (mirror.MAX_NOTE_BYTES). Count the turns in the full note.
     note = os.path.join(home, "notes", "sessions", sid + ".md")
+    full = os.path.join(home, ".claude", "mirror-archive", "sessions", sid + ".md")
     body = open(note, encoding="utf-8").read() if os.path.exists(note) else ""
-    check("all %d turns were rendered" % TURNS, body.count("### 🕐 ") == TURNS and p.returncode == 0)
+    whole = open(full, encoding="utf-8").read() if os.path.exists(full) else body
+    check("all %d turns were rendered" % TURNS, whole.count("### 🕐 ") == TURNS and p.returncode == 0)
+    check("the vault copy stays under the note cap",
+          0 < len(body.encode("utf-8")) <= 300_000 and body.count("### 🕐 ") <= TURNS)
     ceil = CEIL_RENDER * scale()
     check("render stays under %.0f s" % ceil, took < ceil)
 
