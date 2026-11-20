@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """organism orchestrate: run a set of Claude Code sessions, one per repo, and keep a ledger of their lives.
 
-  organism orchestrate list                        every agent: lifecycle state, generations, brief date
+  organism orchestrate roster                      every agent: lifecycle state, generations, brief date
   organism orchestrate summon <name> [--effort E] [--dry]
                                                    start a fresh session in the agent's repo
                                                    (from its brief when it has lived before)
@@ -10,8 +10,8 @@
   organism orchestrate ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
                                                    the ledger: every summon, order, report and harvest
 
-`organism fleet`, `up` and `down` are the old names of `orchestrate`, `summon` and
-`unsummon`. They still work.
+`organism fleet`, `list`, `up` and `down` are the old names of `orchestrate`, `roster`,
+`summon` and `unsummon`. They still work.
 
 An agent's life has four steps. `summon` starts a fresh session that reads only the agent's
 brief (HANDOFF.md). Work is the orders it gets and the reports it sends. `unsummon` runs
@@ -581,7 +581,7 @@ def cmd_list(cfg):
 
 
 def cmd_up(cfg, name, effort=None, dry=False):
-    a = cfg["agents"].get(name) or sys.exit(f"organism orchestrate: no agent {name} in the roster (see orchestrate list)")
+    a = cfg["agents"].get(name) or sys.exit(f"organism orchestrate: no agent {name} in the roster (see orchestrate roster)")
     a["name"] = name
     st, s, last = lifecycle(cfg, name)
     if s:
@@ -790,7 +790,7 @@ def main(a):
     cfg = load_config()
     flag = lambda f: f in a
     opt = lambda f: a[a.index(f) + 1] if f in a and a.index(f) + 1 < len(a) else None
-    if a[0] == "list":
+    if a[0] in ("roster", "list"):
         cmd_list(cfg)
         return 0
     if a[0] in ("summon", "resummon", "up") and len(a) > 1:

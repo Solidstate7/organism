@@ -11,7 +11,7 @@
   - SendMessage: order, report and agent-to-agent message, first line only, redacted, clipped;
     in-process recipients (main, a subagent) and headless senders add nothing; one tool
     call is recorded once however many times the hook runs
-  - orchestrate list: live, harvested, closed, never summoned, generations
+  - orchestrate roster: live, harvested, closed, never summoned, generations
   - orchestrate ledger: --since, --agent, --json, --md (never over a file it didn't write)
   - summon without herdr-core prints the command (shell-quoted; a bad template is named);
     down without it refuses; down --dry plans
@@ -145,8 +145,8 @@ def test_no_roster():
     r = b.start("web", "s1")
     check("a broken roster: the hook still exits 0, silent, no ledger",
           r.returncode == 0 and r.stdout == "" and not os.path.exists(b.ledger))
-    r = b.run("list")
-    check("…but orchestrate list says the roster can't be read", r.returncode != 0 and "can't be read" in r.stderr)
+    r = b.run("roster")
+    check("…but orchestrate roster says the roster can't be read", r.returncode != 0 and "can't be read" in r.stderr)
     for label, text in (("agents as an object", '{"agents": {"web": {"repo": "~/dev/web"}}}'),
                         ("null", "null"), ("a list", "[]"),
                         ("a number as a name", '{"agents": [{"name": 5, "repo": "~/dev/web"}]}'),
@@ -157,8 +157,8 @@ def test_no_roster():
         hooks = [b.start("web", "s1"), b.end("web", "s1"), b.send(b.repos["web"], "uds:/x.sock", "hi")]
         check(f"roster with {label}: every hook exits 0, silent",
               all(r.returncode == 0 and r.stdout == "" and "Traceback" not in r.stderr for r in hooks))
-        r = b.run("list")
-        check(f"roster with {label}: list says it can't be read, no traceback",
+        r = b.run("roster")
+        check(f"roster with {label}: orchestrate roster says it can't be read, no traceback",
               r.returncode != 0 and "can't be read" in r.stderr and "Traceback" not in r.stderr)
     check("no ledger from a roster of the wrong shape", not os.path.exists(b.ledger))
     b.done()
@@ -319,7 +319,7 @@ def test_messages():
 
 
 def test_list_and_ledger():
-    print("cli: orchestrate list and orchestrate ledger")
+    print("cli: orchestrate roster and orchestrate ledger")
     b = Box()
     b.session_file(FAKE_PID, sessionId="x", name="me")
     b.brief("web", "w\n")
@@ -336,17 +336,18 @@ def test_list_and_ledger():
     with open(b.ledger, "a") as fh:
         fh.write('{"ts": "2026-01-01T00:00:00+00:00", "event": "order", "agent": "api", "from": "x", "to": "api", "line": "old"}\n')
         fh.write('{"torn line\n')
-    r = b.run("list")
+    r = b.run("roster")
     out = r.stdout
     rows = {l.split()[0]: l for l in out.splitlines()[1:] if l.strip()}
-    check("list runs", r.returncode == 0 and set(rows) == {"web", "api", "notes"})
+    check("roster runs", r.returncode == 0 and set(rows) == {"web", "api", "notes"})
+    check("list, the old name, prints the same", b.run("list").stdout == out)
     check("web: harvested, 2 generations, its CLAUDE.md role",
           "harvested" in rows.get("web", "") and " 2 " in rows["web"] and "the shop front" in rows["web"])
     check("api: live as its session name, 0 generations recorded", "live as api-9" in rows.get("api", ""))
     check("notes: closed, its roster role", "closed" in rows.get("notes", "") and "keeps notes" in rows["notes"])
     os.remove(os.path.join(b.sessions, f"{live}.json"))
     b.write_config({"agents": [{"name": "web", "repo": "~/dev/web"}, {"name": "spare", "repo": "~/dev/spare"}]})
-    check("an agent with no events: never summoned", "never summoned" in b.run("list").stdout)
+    check("an agent with no events: never summoned", "never summoned" in b.run("roster").stdout)
     b.write_config()
 
     r = b.run("ledger")
@@ -637,7 +638,7 @@ def test_dispatch():
                        text=True, env=b.env(), timeout=30)
     check("organism help lists orchestrate", "organism orchestrate" in r.stdout and "organism fleet" not in r.stdout)
     r = b.run("bogus")
-    check("an unknown command exits 2 with the usage", r.returncode == 2 and "orchestrate list" in r.stderr)
+    check("an unknown command exits 2 with the usage", r.returncode == 2 and "orchestrate roster" in r.stderr)
     b.done()
 
 

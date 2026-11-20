@@ -13,8 +13,9 @@ All notable changes to Organism are listed here. The format follows
 
 ### Changed
 
-- `organism fleet` is now `organism orchestrate`, `up` is now `summon`, and `down` is now
-  `unsummon`. The commands do the same work as before, and the old names still work.
+- `organism fleet` is now `organism orchestrate`, `list` is now `roster`, `up` is now
+  `summon`, and `down` is now `unsummon`. The commands do the same work as before, and
+  the old names still work.
 - `docs/FLEET.md` is now `docs/ORCHESTRATE.md`.
 - These names stay as they were: the roster `~/.claude/state/organism-fleet.json`, the
   log `~/.claude/state/fleet-ledger.jsonl`, the `ORGANISM_FLEET_*` variables, and the

@@ -1,5 +1,5 @@
 {
-  "_comment": "EXAMPLE roster for `organism orchestrate`. Copy to ~/.claude/state/organism-fleet.json (or point ORGANISM_FLEET_CONFIG at it) and replace the placeholder agents. One agent per repo. model and effort default to opus and high; handoff defaults to true (false closes the agent without /harvest, and the ledger says so); brief defaults to <repo>/HANDOFF.md; role is shown by `orchestrate list` (default: the first line of the repo's CLAUDE.md). launch is the command `orchestrate summon` runs in the repo, per agent or for all; {model}, {effort}, {name} and {repo} are filled in. herdr is the herdr-core command (default hc).",
+  "_comment": "EXAMPLE roster for `organism orchestrate`. Copy to ~/.claude/state/organism-fleet.json (or point ORGANISM_FLEET_CONFIG at it) and replace the placeholder agents. One agent per repo. model and effort default to opus and high; handoff defaults to true (false closes the agent without /harvest, and the ledger says so); brief defaults to <repo>/HANDOFF.md; role is shown by `orchestrate roster` (default: the first line of the repo's CLAUDE.md). launch is the command `orchestrate summon` runs in the repo, per agent or for all; {model}, {effort}, {name} and {repo} are filled in. herdr is the herdr-core command (default hc).",
   "launch": "claude --model {model} --effort {effort}",
   "herdr": "hc",
   "agents": [

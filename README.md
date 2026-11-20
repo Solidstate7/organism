@@ -199,7 +199,7 @@ a JSON file that you write. Without a roster, none of this runs.
 
 | Command | What it does |
 |---|---|
-| `organism orchestrate list` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
+| `organism orchestrate roster` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
 | `organism orchestrate summon <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
 | `organism orchestrate unsummon <name>` | Runs `/harvest` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
 | `organism orchestrate ledger` | Shows the log: when each session started and stopped, and the first line of each order and report. |

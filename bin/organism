@@ -70,7 +70,7 @@ case "${1:-help}" in
                   "  ${G}organism check${X}         run the doc check now ${D}(experimental; setup --doc-check turns it on)${X}" \
                   "  ${G}organism ack${X}           clear the doc check's open warnings" \
                   "  ${G}organism guard-status${X}  show whether the publish guard has terms to block" \
-                  "  ${G}organism orchestrate${X}   run several agents, one per repo ${D}(list|summon|unsummon|ledger)${X}" \
+                  "  ${G}organism orchestrate${X}   run several agents, one per repo ${D}(roster|summon|unsummon|ledger)${X}" \
                   "  ${G}organism doctor${X}        verify the installation" \
                   "  ${G}organism uninstall${X}     remove Organism from this machine ${D}(prints the plan; --yes applies)${X}" \
                   "  ${G}organism link${X}          use Organism on another computer" "" \
@@ -84,7 +84,7 @@ case "${1:-help}" in
                 "  ${G}organism status${X}      every job: state, schedule, last success ${D}(--all: other machines too)${X}" \
                 "  ${G}organism check${X}       run the doc check now ${D}(experimental; turn it on in setup)${X}" \
                 "  ${G}organism update${X}      pull + redeploy ${D}(git pull is the deploy)${X}" \
-                "  ${G}organism orchestrate${X} run several agents, one per repo ${D}(list|summon|unsummon|ledger)${X}" \
+                "  ${G}organism orchestrate${X} run several agents, one per repo ${D}(roster|summon|unsummon|ledger)${X}" \
                 "  ${G}organism doctor${X}      verify the installation" \
                 "  ${G}organism start${X}       schedule the background jobs ${D}(optional)${X}" \
                 "  ${G}organism stop${X}        unschedule them ${D}(everything still runs by hand)${X}" \

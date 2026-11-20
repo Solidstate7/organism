@@ -54,7 +54,7 @@ The other fields are optional:
 | `effort` | `high` | Filled into `{effort}`. `summon --effort` overrides it once. |
 | `brief` | `<repo>/HANDOFF.md` | The file that `/harvest` must rewrite. |
 | `handoff` | `true` | `false` closes the agent without `/harvest`, and the ledger says so. |
-| `role` | the first line of the repo's `CLAUDE.md` | Shown by `orchestrate list`. |
+| `role` | the first line of the repo's `CLAUDE.md` | Shown by `orchestrate roster`. |
 | `launch` | the roster's `launch` | A launch command for this agent only. |
 
 At the top level, `launch` is the command that `summon` runs in the repo. It can use
@@ -67,15 +67,15 @@ When an agent's repo holds another agent's repo, the deeper one wins.
 ## Commands
 
 ```
-organism orchestrate list
+organism orchestrate roster
 organism orchestrate summon <name> [--effort E] [--dry]
 organism orchestrate unsummon <name> [--no-handoff] [--dry]
 organism orchestrate ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
 ```
 
-The old names `organism fleet`, `up` and `down` still work.
+The old names `organism fleet`, `list`, `up` and `down` still work.
 
-**`orchestrate list`** shows each agent with its state, its number of generations, the date of
+**`orchestrate roster`** shows each agent with its state, its number of generations, the date of
 its brief and its role. The state is one of these:
 
 - **live as `<session name>`**: a session is running in the repo now.
