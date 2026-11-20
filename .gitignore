@@ -63,6 +63,9 @@ reconcile-pairings.json
 # Skills, personal or synced from claude.ai: deploy.sh links ~/.claude/skills here, so every
 # skill Claude Code saves lands in this tree. The core ships none; never commit one.
 /claude/skills/
+# A hook a terminal manager installs into ~/.claude/hooks (here, through the symlink).
+# It belongs to that tool and a reinstall overwrites it.
+/claude/hooks/herdr-agent-state.sh
 # ...but keep the sanitized, codename-free examples (override the re-deny)
 !**/paths.env.example
 !**/reconcile-pairings.example.json
