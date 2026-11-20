@@ -193,6 +193,14 @@ def run_inject(sb, project_dir, session_id, payload=None, env_extra=None):
            "CLAUDE_CODE_SESSION_ID": session_id,
            "CLAUDE_OBSIDIAN_MIRROR_DIR": sb.mirror_root, **(env_extra or {})}
     env.pop("RECONCILE_CONFIG", None)
+    # where.pairings() also reads the legacy file next to the code, outside the sandbox. A
+    # live install may have one, so a sandbox without its own pairings gets an empty config.
+    own = [os.path.join(sb.home, ".claude", d, "reconcile-pairings.json") for d in ("state", "hooks")]
+    if not any(os.path.isfile(p) for p in own):
+        empty = os.path.join(sb.tmp, "no-pairings.json")
+        with open(empty, "w") as f:
+            f.write("{}")
+        env["RECONCILE_CONFIG"] = empty
     if payload is None:
         r = subprocess.run(["bash", os.path.join(HOOKS, "inject-handoff.sh")],
                            env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
