@@ -76,6 +76,27 @@ Fill in the pull request template, keep each pull request to one change, and mak
 `run-all.sh` passes. By contributing you agree that your contribution is licensed under
 the repository's license.
 
-## Push to deploy
+## Releasing
 
-A push to `main` is a release. `.claude-plugin/marketplace.json` serves the plugin from `./`, so every user who installed Organism through its marketplace gets `main` at their next plugin update, with no staging or tag in between; CI runs the suite on macOS and Linux only after the push. Run the suite before a push, and keep the README true to the code. A plugin must not carry a `CLAUDE.md` at its root (Claude Code would load it into every user's session), which is why this note lives here.
+A push to `main` is a release. `.claude-plugin/marketplace.json` serves the plugin from
+`./`, so every user who installed Organism through its marketplace gets `main` at their
+next plugin update. CI runs only after the push, so check everything before it:
+
+1. Run `bash claude/hooks/tests/run-all.sh` on the exact commit that you will push. It
+   must print `ALL PASS`.
+2. Read every commit that `origin/main` doesn't have yet (`git log -p origin/main..HEAD`)
+   for names, paths or keys that must stay private.
+3. Set the new version in `.claude-plugin/plugin.json`, and give it a dated section in
+   `CHANGELOG.md` that covers every change since the last published version.
+4. Check that the README still matches the code.
+5. Tag the release commit: `git tag -a vX.Y.Z -m "Organism X.Y.Z"`.
+6. Push `main` and the tag: `git push origin main vX.Y.Z`. The push must be a fast-forward.
+   Never force-push `main`, because users' plugin caches hold the old commits. To undo a
+   release, revert the commits and push the reverts.
+7. Wait for CI to pass on macOS and Linux. Then, on a computer with the marketplace
+   install, run `claude plugin marketplace update organism` and
+   `claude plugin update organism@organism`, and check that `claude plugin list` shows
+   the new version.
+
+A plugin must not carry a `CLAUDE.md` at its root, because Claude Code would load it into
+every user's session. That is why these notes live here.
