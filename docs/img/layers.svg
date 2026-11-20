@@ -30,7 +30,7 @@
   <text class="s" x="216" y="78">what you say in a session: goals, corrections, decisions</text>
 
   <path class="edge" d="M330,92 V122" marker-end="url(#arr)"/>
-  <text class="lbl" x="318" y="112" text-anchor="end">/handoff writes the decision down</text>
+  <text class="lbl" x="318" y="112" text-anchor="end">/harvest writes the decision down</text>
   <path class="edge up" d="M510,124 V94" marker-end="url(#arrm)"/>
   <text class="lbl mu" x="522" y="112">session notes hold the full conversation</text>
 

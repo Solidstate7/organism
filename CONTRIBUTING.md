@@ -36,7 +36,7 @@ touches your real `~/.claude`, your vault or `launchd`. Checks that need macOS s
 machine, `ORGANISM_TIMING_SCALE=3` gives it three times the room, and
 `ORGANISM_SKIP_TIMING=1` skips it.
 
-The `/handoff` eval harness in `claude/hooks/tests/evals/handoff/` runs a real headless
+The `/harvest` eval harness in `claude/hooks/tests/evals/harvest/` runs a real headless
 Claude session per sample repo, so it costs tokens and is never part of the test suite.
 Its README explains how to run it.
 

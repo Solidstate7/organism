@@ -8,7 +8,7 @@ computer](#more-than-one-computer), [alerts](#alerts) and [the doc check](#the-d
 ## Decision records for old repos, and commits that explain themselves
 
 A repo with history but no records still holds its decisions: in its commits, its old
-session transcripts and its docs. `/handoff` notices that history and offers, once, to
+session transcripts and its docs. `/harvest` notices that history and offers, once, to
 **reconstruct** the missing records from it. Each rebuilt record is marked
 *reconstructed* and names its sources; none is passed off as written at the time. A
 brand-new repo just starts at record 0001; the tool detects which case it is in. Either
@@ -29,17 +29,17 @@ works on its own:
 | part | writes | needs |
 |---|---|---|
 | doc check | the fenced status table on each repo's vault page (branch, commit, uncommitted files, record count) | saying yes to it in setup |
-| `/handoff` | the decision records and the brief | a session worth recording, or a past worth reconstructing |
-| decision links | record ↔ commit, both directions, as git notes | nothing; `/handoff` links as it records |
+| `/harvest` | the decision records and the brief | a session worth recording, or a past worth reconstructing |
+| decision links | record ↔ commit, both directions, as git notes | nothing; `/harvest` links as it records |
 
 **New repo:** its page starts with a table reading `0 ADR(s)`. That's honest, not broken:
-the first `/handoff` creates `docs/adr/`, and the next doc check run shows the count as 1
+the first `/harvest` creates `docs/adr/`, and the next doc check run shows the count as 1
 with no hand-editing.
 
 **Existing repo:** pairing works the same day (the status table doesn't care about the
-past). `/handoff` then notices the history no record covers and offers to rebuild it. In
+past). `/harvest` then notices the history no record covers and offers to rebuild it. In
 one sentence: the doc check tells the truth about *now* and never needs the past;
-`/handoff` recovers the past and never blocks the present.
+`/harvest` recovers the past and never blocks the present.
 
 ## The doc check (experimental)
 
@@ -165,7 +165,7 @@ against accidents, not a sandbox. The full rules are in
 
 ## `adr-link.sh`: the decision links by hand
 
-`/handoff` makes the links for you; this is the tool underneath, for when you want them
+`/harvest` makes the links for you; this is the tool underneath, for when you want them
 by hand. In a repo, `organism adr-link <command>`:
 
 - `query <N|hash>` returns the commits for a decision, or the decision for a commit.

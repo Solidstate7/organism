@@ -21,13 +21,13 @@ ran on. Every turn below it has the same shape, so your eyes learn where to look
 
 **🧑 You**
 
-Explain the handoff command in detail
+Explain the harvest command in detail
 
 **🤖 Claude** · `fable-5-1`
 
 I'll read the command file and its hooks first.
 
-> [!note]- 🖥️ Bash · Locate the handoff command files
+> [!note]- 🖥️ Bash · Locate the harvest command files
 >
 > ```
 > (output only, clipped at 3,000 characters or 60 lines)

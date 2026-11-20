@@ -8,12 +8,12 @@ Organism is a [Claude Code](https://claude.com/claude-code) plugin that keeps th
 behind the code that your agent writes. It does three things:
 
 1. It saves every session to your notes folder as readable markdown, as it happens.
-2. At the end of a session, `/handoff` writes each decision as a dated record in the repo.
+2. At the end of a session, `/harvest` writes each decision as a dated record in the repo.
    It links each record to the commits that carry it out.
 3. The next session starts with a short "where we are" brief, loaded automatically.
 
 `organism fleet` is for running several sessions at once, one per repo. It starts each
-session, stops it after `/handoff`, and logs both. See
+session, stops it after `/harvest`, and logs both. See
 [Running several sessions](#running-several-sessions).
 
 Organism is plain files, a few hooks and a few scripts. No server, no database, no vector
@@ -33,10 +33,10 @@ until you say yes.
 
 A vault is any folder of markdown, and Obsidian is optional. Setup looks for one in
 `~/Projects`, `~/Documents`, Obsidian's iCloud folder and your home folder. If yours is
-somewhere else, tell it the path. Until a vault is set, session notes stay off. `/handoff`
+somewhere else, tell it the path. Until a vault is set, session notes stay off. `/harvest`
 works from the start in any git repo, and anywhere inside the vault once one is set.
 
-After that, the only habit is running `/handoff` at the end of a session that made a
+After that, the only habit is running `/harvest` at the end of a session that made a
 decision. The hooks do the rest.
 
 To update, run these two commands and restart Claude Code. A session that is already
@@ -74,18 +74,18 @@ code and get back to the sentence in which you asked for it.
 
 | What gets lost | What Organism keeps |
 |---|---|
-| Why the code exists | A dated decision record for each decision, linked both ways to its commits. See [What /handoff does](#what-handoff-does). |
+| Why the code exists | A dated decision record for each decision, linked both ways to its commits. See [What /harvest does](#what-harvest-does). |
 | What was said while building it | Every session, saved to your vault as notes you own. See [Session notes](#session-notes). |
 
-![The loop: a session feeds session notes after every reply. /handoff writes the "where we are" note and the decision records, and the next session loads the note when it starts. Records link both ways to commits. Reconcile, an optional and experimental check, reads the commits, rewrites the half of the doc page that the machine owns, and warns you on a mismatch.](docs/img/loop.svg)
+![The loop: a session feeds session notes after every reply. /harvest writes the "where we are" note and the decision records, and the next session loads the note when it starts. Records link both ways to commits. Reconcile, an optional and experimental check, reads the commits, rewrites the half of the doc page that the machine owns, and warns you on a mismatch.](docs/img/loop.svg)
 
-## What /handoff does
+## What /harvest does
 
 You run it once, at the end of a session that made a decision. It commits the work and
 writes each decision as a record. Then it links the records to the commits that carry
 them out, and rewrites the brief for the next session.
 
-![The eight steps of /handoff in four jobs. Settle the code: read the repo, commit the work first. Record the reasons: find the decisions, write the records, show the draft, commit the records. Link records to commits. Hand over: rewrite the brief. Each step carries the problem it prevents.](docs/img/handoff.svg)
+![The eight steps of /harvest in four jobs. Settle the code: read the repo, commit the work first. Record the reasons: find the decisions, write the records, show the draft, commit the records. Link records to commits. Hand over: rewrite the brief. Each step carries the problem it prevents.](docs/img/handoff.svg)
 
 The diagram shows one run, top to bottom, in four jobs. Under each step is the problem
 that it prevents. Amber marks the only two places where it may ask you something. Green
@@ -105,11 +105,11 @@ A record is never renumbered, rewritten or deleted. A wrong one is superseded by
 record, and both stay on file. The commits that carry out a decision land before the
 record that explains it, so the history reads as cause, then effect.
 
-Only `/handoff` writes the brief. If you skip a run, the next session still gets the
+Only `/harvest` writes the brief. If you skip a run, the next session still gets the
 brief as you left it. It also gets links to the saved notes of the sessions that ran
 after it.
 
-The brief states facts about the repo, so `/handoff` checks them. Before writing, it
+The brief states facts about the repo, so `/harvest` checks them. Before writing, it
 reads the branch, the recent commits and what has been pushed. After writing, it checks
 the new brief against them. A commit the brief names but the repo doesn't have, or a
 commit called pushed that isn't, is reported to you. So is an open item the old brief
@@ -136,23 +136,23 @@ had and the new one dropped.
 
 | Form | What it does |
 |---|---|
-| `/handoff` | The normal run, at the end of a session. |
-| `/handoff <note>` | The same run, with your note steering the brief. Any text after the command is the note. |
-| `/handoff --retro` | Rebuild past decisions from the repo's history now, instead of waiting for the offer. Text after the flag narrows it: a subsystem, a date range, a suspected gap. |
+| `/harvest` | The normal run, at the end of a session. |
+| `/harvest <note>` | The same run, with your note steering the brief. Any text after the command is the note. |
+| `/harvest --retro` | Rebuild past decisions from the repo's history now, instead of waiting for the offer. Text after the flag narrows it: a subsystem, a date range, a suspected gap. |
 
 A note that says what's next shapes the brief, and the next session opens on it:
 
 ```
-/handoff next: migrate the queue consumer, then re-run the load test
+/harvest next: migrate the queue consumer, then re-run the load test
 ```
 
 A note that makes a choice and gives a reason becomes a record as well:
 
 ```
-/handoff we keep SQLite for the job store; Postgres adds an ops burden we can't staff
+/harvest we keep SQLite for the job store; Postgres adds an ops burden we can't staff
 ```
 
-In a repo with history but no records, `/handoff` offers once to rebuild them. Rebuilt
+In a repo with history but no records, `/harvest` offers once to rebuild them. Rebuilt
 records are marked "reconstructed" and name their sources.
 [docs/ADVANCED.md](docs/ADVANCED.md#decision-records-for-old-repos-and-commits-that-explain-themselves)
 says how far to trust them.
@@ -197,9 +197,9 @@ a JSON file that you write. Without a roster, none of this runs.
 
 | Command | What it does |
 |---|---|
-| `organism fleet list` | Shows each agent: running, stopped after `/handoff`, stopped without it, or never started. It also shows how many sessions the agent has had. |
+| `organism fleet list` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
 | `organism fleet up <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
-| `organism fleet down <name>` | Runs `/handoff` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
+| `organism fleet down <name>` | Runs `/harvest` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
 | `organism fleet ledger` | Shows the log: when each session started and stopped, and the first line of each order and report. |
 
 A long session fills its context and gets slower and less careful. A new session that
@@ -209,8 +209,8 @@ context.
 
 Hooks write the log, so a session that you start by hand is in it too. To open and
 type into terminals, `up` and `down` need herdr-core, a terminal manager. Without it,
-`up` prints the command to run in the repo, and you run `/handoff` and `/exit` yourself.
-If `/handoff` asks for a permission or asks a question, `down` stops and leaves the
+`up` prints the command to run in the repo, and you run `/harvest` and `/exit` yourself.
+If `/harvest` asks for a permission or asks a question, `down` stops and leaves the
 answer to you. Run the commands in your main session, because `organism` is on the path of Claude's
 shell. [docs/FLEET.md](docs/FLEET.md) explains the roster and every option.
 
@@ -218,12 +218,14 @@ shell. [docs/FLEET.md](docs/FLEET.md) explains the roster and every option.
 
 | Command | What it does |
 |---|---|
-| `/handoff` | Commit the work, write the decision records, link them to commits, rewrite the brief. Takes `--retro` or a note. |
+| `/harvest` | Commit the work, write the decision records, link them to commits, rewrite the brief. Takes `--retro` or a note. |
 | `/incognito` | Control the session notes: `on`, `off`, `toggle`, `purge` or `status` (the default). |
 | `/organism-setup` | Show what setup found and apply it when you say yes. |
 
-`/organism:handoff` and `/organism:incognito` work too, in case another plugin also has a
-`/handoff`.
+`/organism:harvest` and `/organism:incognito` work too, in case another plugin also has a
+`/harvest`.
+
+Until 0.4.0, `/harvest` was called `/handoff`. It does the same work under the new name.
 
 Five hooks run without any input from you:
 

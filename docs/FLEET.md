@@ -14,7 +14,7 @@ An agent is one repo with one Claude Code session at a time. Its life has four s
 1. **Summon.** A fresh session starts in the repo. It knows nothing except what the
    repo's brief (`HANDOFF.md`) and `CLAUDE.md` tell it.
 2. **Work.** The session takes orders and sends reports, usually with `SendMessage`.
-3. **Harvest.** `/handoff` rewrites the brief with what the session learned, and `/exit`
+3. **Harvest.** `/harvest` rewrites the brief with what the session learned, and `/exit`
    ends the session.
 4. **Resummon.** The next fresh session starts from that brief.
 
@@ -51,14 +51,14 @@ The other fields are optional:
 | `model` | `opus` | Filled into `{model}` in the launch command. |
 | `effort` | `high` | Filled into `{effort}`. `fleet up --effort` overrides it once. |
 | `brief` | `<repo>/HANDOFF.md` | The file a harvest must rewrite. |
-| `handoff` | `true` | `false` closes the agent without `/handoff`, and the ledger says so. |
+| `handoff` | `true` | `false` closes the agent without `/harvest`, and the ledger says so. |
 | `role` | the first line of the repo's `CLAUDE.md` | Shown by `fleet list`. |
 | `launch` | the roster's `launch` | A launch command for this agent only. |
 
 At the top level, `launch` is the command `fleet up` runs in the repo. It can use
 `{model}`, `{effort}`, `{name}` and `{repo}`. `herdr` is the herdr-core command (default
 `hc`), `shell` is the shell that runs the launch command (default `$SHELL`), and
-`handoff_command` is the command a harvest types (default `handoff`).
+`handoff_command` is the command a harvest types (default `harvest`).
 
 When an agent's repo holds another agent's repo, the deeper one wins.
 
@@ -91,16 +91,16 @@ The launch command comes from `launch` in the roster (default
 `claude --model {model} --effort {effort}`). Each value is quoted for the shell, so a repo
 path with spaces works. For a literal brace in the template, write `{{` or `}}`.
 
-**`fleet down`** harvests a live agent. It types `/handoff` into the session that runs in
+**`fleet down`** harvests a live agent. It types `/harvest` into the session that runs in
 the agent's terminal, waits for the brief to be rewritten, types `/exit`, and closes the
 terminal. A session you started by hand in the same repo is left alone. If the brief was
 not rewritten, it stops and leaves the session running so you can look. It refuses while
 the agent is in the middle of a turn, and it never types over text waiting in the prompt
 box. If a command doesn't arrive in the box intact, it clears the box and stops, so a
 later Enter can't run half a command. For an agent with `"handoff": false`, or with
-`--no-handoff`, it skips `/handoff` and closes the session.
+`--no-handoff`, it skips `/harvest` and closes the session.
 
-`down` never answers a dialog. If `/handoff` asks for a permission or asks a question,
+`down` never answers a dialog. If `/harvest` asks for a permission or asks a question,
 `down` stops, shows the screen and leaves the session open for you to answer. The one
 exception: when `/exit` shows the dialog about an unsent feedback draft, `down` presses
 Esc, which discards the draft and lets the session end.
@@ -115,7 +115,7 @@ command line called `hc`. Without it:
 - `fleet up` prints the command to run in the agent's repo, for example
   `cd ~/dev/example-api && claude --model opus --effort xhigh`. You open a terminal and
   run it.
-- `fleet down` refuses. Harvest by hand: run `/handoff` in the session, then `/exit`.
+- `fleet down` refuses. Harvest by hand: run `/harvest` in the session, then `/exit`.
 
 The ledger works the same either way, because hooks write it, not the commands.
 
