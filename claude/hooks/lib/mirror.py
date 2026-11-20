@@ -24,6 +24,7 @@ On-disk format, sessions/<id>.md (DO NOT change one side without the other):
     **🤖 Claude**
     <rendered reply>
 """
+import bisect
 import datetime
 import glob
 import json
@@ -143,7 +144,21 @@ def sessions_dir():
 # reviews still see the whole window.
 MAX_NOTE_BYTES = 300_000
 MD_ARCHIVE = re.compile(r"^> \[!warning\] 📦 .*?full note: `(.+?)`\s*$", re.M)
-_NOTE_SEP = re.compile(r"^---\n\n(?=### 🕐 )", re.M)   # the separator render_session_file writes
+# The separator render_session_file writes: `---`, a blank line, then a turn's own opening
+# (an exact TURN_RE stamp and the **🧑 You** line). A reply that quotes a turn inside a
+# code fence is skipped by _note_seps, so a capped copy never starts mid-turn there.
+_NOTE_SEP = re.compile(r"^---\n\n(?=### 🕐 \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[ \t]*\n\n\*\*🧑 You\*\*)", re.M)
+_FENCE = re.compile(r"^[ \t]{0,3}(```|~~~)", re.M)
+
+
+def _note_seps(text):
+    """The turn separators of a rendered note, outside code fences."""
+    fences = [m.start() for m in _FENCE.finditer(text)]
+    out = []
+    for m in _NOTE_SEP.finditer(text):
+        if bisect.bisect_left(fences, m.start()) % 2 == 0:
+            out.append(m)
+    return out
 
 
 def archive_dir():
@@ -173,7 +188,7 @@ def trim_note(text, archive_path, max_bytes=MAX_NOTE_BYTES):
     `max_bytes`, else its header, the archive marker and the newest turns that fit, at
     least the last one. Returns (note, kept, total); kept == total means untrimmed."""
     nbytes = len(text.encode("utf-8"))
-    seps = list(_NOTE_SEP.finditer(text))
+    seps = _note_seps(text)
     total = len(seps)
     if nbytes <= max_bytes or not seps:
         return text, total, total

@@ -96,6 +96,15 @@ def test_trim_note():
     check("a quoted marker does not count as the header marker",
           not mirror.MD_ARCHIVE.search(quoted[:qm.start()]))
     check("archive_line refuses a path with a backtick", mirror.archive_line("/a/`b`", 1, 2, 3) == "")
+    fake = "---\n\n" + mirror.turn_block("2001-01-01 00:00:00", "quoted prompt", "quoted reply")
+    loose = "---\n\n### 🕐 a heading that is not a stamp"
+    q_turns = [(ts, f"q prompt {i}", ("x" * 2500) + (f"\n\n```\n{fake}\n```\n\n{loose}\n" if i % 7 == 0 else ""))
+               for i, ts in enumerate(stamps(300))]
+    qn, qk, qt = mirror.trim_note(render(q_turns), ARC)
+    check("a turn quoted in a reply (in a code fence) or a loose heading is not a turn", qt == 300)
+    qm = list(mirror.TURN_RE.finditer(qn))
+    check("…so the capped copy starts at a real turn",
+          0 < qk < qt and [m.group(1) for m in qm if m.group(1) != "2001-01-01 00:00:00"][0] == q_turns[-qk][0])
 
 
 def test_full_text_and_gather():
