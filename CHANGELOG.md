@@ -4,7 +4,7 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] - 2026-11-19
+## [0.3.0] - 2026-11-20
 
 The first release since 0.1.2. It also brings the changes listed under 0.2.0, which was
 never published on its own.
