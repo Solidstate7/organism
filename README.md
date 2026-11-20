@@ -196,7 +196,15 @@ a JSON file that you write. Without a roster, none of this runs.
 
 ![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs a harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. The history records every start, stop, order and report.](docs/img/orchestrate.svg)
 
-You ask the main session for four things:
+Agents start and close on their own. When you ask the main session to give an agent an
+order, it starts the agent first if the agent isn't running. Before a start, Organism
+checks how much memory the machine has available. If there isn't enough for one more
+session, it stops the agent that has been idle longest. The stop runs a harvest, so the
+brief keeps what that session learned. It never stops an agent that is working. An agent that
+waits for you to type counts as idle, so it can be stopped when memory runs short. The
+roster can turn this off or set a limit on how many agents run at once.
+
+You can still ask the main session for four things yourself:
 
 | You ask to | What happens |
 |---|---|

@@ -62,15 +62,20 @@ At the top level, `launch` is the command that `summon` runs in the repo. It can
 `hc`), `shell` is the shell that runs the launch command (default `$SHELL`), and
 `handoff_command` is the command that `unsummon` types (default `harvest`).
 
+Five more top-level fields set how many sessions the machine may hold. They are explained
+under [Starting and closing on their own](#starting-and-closing-on-their-own): `auto`,
+`max_live`, `min_free_mb`, `session_mb` and `idle_minutes`.
+
 When an agent's repo holds another agent's repo, the deeper one wins.
 
 ## Commands
 
 ```
 organism orchestrate roster
-organism orchestrate summon <name> [--effort E] [--dry]
+organism orchestrate summon <name> [--effort E] [--dry] [--force]
 organism orchestrate unsummon <name> [--no-handoff] [--dry]
 organism orchestrate history [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
+organism orchestrate tend [--dry]
 ```
 
 The old names `organism fleet`, `list`, `up` and `down` still work.
@@ -109,6 +114,53 @@ Esc, which discards the draft and lets the session end.
 
 `--dry` on either command prints the plan and changes nothing.
 
+## Starting and closing on their own
+
+You don't start and stop agents one by one. The main session runs `summon` before it
+sends an agent an order. If the agent is live, `summon` prints its address and starts
+nothing. If it isn't, `summon` starts it.
+
+Before `summon` starts a session, it checks that the machine has room for one more. It
+reads how much memory is available: on macOS from the kernel, on Linux from
+`MemAvailable`. That amount has to cover one session and a reserve. If the roster sets
+`max_live`, the number of live agents has to stay within it too.
+
+When there is no room, `summon` closes the agent that has been idle longest. It closes
+it the way `unsummon` does, with `/harvest` first, so the brief keeps what the session
+learned. Then it checks again. It closes only as many agents as the shortage calls for.
+
+Some agents are never closed this way:
+
+- an agent in the middle of a turn, or one waiting on a dialog
+- an agent with text waiting in its prompt box
+- a session you started by hand, outside a terminal that `summon` opened
+
+When no agent can be closed, `summon` starts nothing and says why. `--force` starts the
+session anyway. `--dry` prints which agent it would close and changes nothing.
+
+Agents stay open while there is room. Closing one costs a harvest, and starting it again
+costs reading the brief, so an idle agent is left alone until its memory is needed.
+
+`orchestrate tend` makes the same check without starting anything. When the machine is
+short, it closes agents that have been idle for `idle_minutes` or longer, the longest
+idle first. Each time a session starts, a hook makes the check. If the machine is short,
+the hook starts `tend` in the background. What `tend` did is in
+`~/.claude/state/orchestrate-tend.log`.
+
+Be aware of one case. An agent that you are reading or typing to by hand counts as idle
+while it waits for you. When memory runs short, it can be harvested and closed.
+
+| Field | Default | What it does |
+|---|---|---|
+| `auto` | `true` | `false` turns all of this off: `summon` checks nothing and `tend` closes nothing. |
+| `max_live` | no limit | The largest number of agents that run at once. |
+| `min_free_mb` | 15% of the machine's memory, at least 512 | The memory, in MB, that stays free after a start. |
+| `session_mb` | `400` | The memory, in MB, that one session is expected to need. |
+| `idle_minutes` | `10` | How long an agent must be idle before `tend` closes it. `summon` doesn't wait this long. |
+
+On a machine with 8 GB the reserve is about 1,200 MB. A start then needs 1,600 MB
+available.
+
 ## herdr-core is optional
 
 `summon` and `unsummon` open and type into terminals through herdr-core, a terminal manager with a
@@ -134,6 +186,7 @@ file. Three hooks write it, so sessions you start by hand are recorded too:
 | | `resume` | `claude --resume` reopened a session. No new generation. |
 | SessionEnd in an agent's repo | `harvest` | The brief was rewritten during the session. Its new time and hash. |
 | | `close` | The brief was not rewritten, and why: handoff is off for this agent, or the session ended without it. |
+| `summon` or `tend` | `autoclose` | An idle agent was closed to make room: why, and how long it had been idle. The `harvest` event of the same session is recorded as usual. |
 | PostToolUse on `SendMessage` | `order` | A message sent to an agent by a session that is not in the roster. |
 | | `report` | A message an agent sent to a session that is not in the roster. |
 | | `message` | A message from one agent to another. |

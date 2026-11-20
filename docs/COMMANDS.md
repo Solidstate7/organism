@@ -37,8 +37,9 @@ lists everything, and `organism doctor` checks the install.
 | Command | What it does |
 |---|---|
 | `organism orchestrate roster` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
-| `organism orchestrate summon <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
+| `organism orchestrate summon <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. If the agent is live, it prints the address and starts nothing, so run it before every order. When the machine has no room, it first harvests and closes the agent that has been idle longest. |
 | `organism orchestrate unsummon <name>` | Runs `/harvest` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
+| `organism orchestrate tend` | Closes idle agents when the machine is short of memory. A hook runs it when a session starts, so you rarely run it yourself. |
 | `organism orchestrate history` | Shows the history: when each session started and stopped, and the first line of each order and report. |
 
 [ORCHESTRATE.md](ORCHESTRATE.md) explains the roster and every option.

@@ -14,6 +14,19 @@ All notable changes to Organism are listed here. The format follows
   each with the record it is linked to or `none`. It writes nothing.
 - At session start, a project whose `CLAUDE.md` has a "Decisions" index gets one more
   paragraph. It tells Claude to read the record behind code before changing that code.
+- Agents start and close on their own. Before `orchestrate summon` starts a session, it
+  checks that the machine has enough memory available for one more. If it doesn't, it
+  harvests and closes the agent that has been idle longest, and then it checks again.
+  It never closes an agent that is working, one with text in its prompt box, or a
+  session started by hand. With no agent to close it starts nothing, and `--force`
+  starts the session anyway.
+- `organism orchestrate tend` closes agents that have been idle for 10 minutes or more
+  when the machine is short of memory. A hook starts it in the background at session
+  start, and its output goes to `~/.claude/state/orchestrate-tend.log`.
+- Five optional roster fields: `auto` (`false` turns the automatic closing off),
+  `max_live`, `min_free_mb`, `session_mb` and `idle_minutes`.
+- The history records an `autoclose` event with the reason each time an agent is closed
+  to make room.
 
 ### Changed
 
