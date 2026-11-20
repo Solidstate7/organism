@@ -12,8 +12,8 @@ behind the code that your agent writes. It does three things:
    It links each record to the commits that carry it out.
 3. The next session starts with a short "where we are" brief, loaded automatically.
 
-`organism fleet` is for running several sessions at once, one per repo. It starts each
-session, stops it after `/harvest`, and logs both. See
+`organism orchestrate` is for running several sessions at once, one per repo. It starts
+each session, stops it after `/harvest`, and logs both. See
 [Running several sessions](#running-several-sessions).
 
 Organism is plain files, a few hooks and a few scripts. No server, no database, no vector
@@ -195,14 +195,14 @@ Some people run one Claude Code session per repo and send each one orders from a
 session. Organism calls each repo with its session an agent and lists them in a roster,
 a JSON file that you write. Without a roster, none of this runs.
 
-![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](docs/img/fleet.svg)
+![One main session sends orders to three agents and gets their reports. Each agent is one repo with one session at a time. Stopping an agent runs /harvest, which rewrites the brief in its repo, and the agent's next session starts from that brief. A log records every start, stop, order and report.](docs/img/orchestrate.svg)
 
 | Command | What it does |
 |---|---|
-| `organism fleet list` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
-| `organism fleet up <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
-| `organism fleet down <name>` | Runs `/harvest` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
-| `organism fleet ledger` | Shows the log: when each session started and stopped, and the first line of each order and report. |
+| `organism orchestrate list` | Shows each agent: running, stopped after `/harvest`, stopped without it, or never started. It also shows how many sessions the agent has had. |
+| `organism orchestrate summon <name>` | Starts a new session in the agent's repo. If the agent ran before, the session starts from the brief that the last one wrote. |
+| `organism orchestrate unsummon <name>` | Runs `/harvest` in the agent's session, checks that the brief was rewritten, and then ends the session with `/exit`. |
+| `organism orchestrate ledger` | Shows the log: when each session started and stopped, and the first line of each order and report. |
 
 A long session fills its context and gets slower and less careful. A new session that
 starts from a short brief has a clean context and still knows where the work stands.
@@ -210,11 +210,11 @@ starts from a short brief has a clean context and still knows where the work sta
 context.
 
 Hooks write the log, so a session that you start by hand is in it too. To open and
-type into terminals, `up` and `down` need herdr-core, a terminal manager. Without it,
-`up` prints the command to run in the repo, and you run `/harvest` and `/exit` yourself.
-If `/harvest` asks for a permission or asks a question, `down` stops and leaves the
-answer to you. Run the commands in your main session, because `organism` is on the path of Claude's
-shell. [docs/FLEET.md](docs/FLEET.md) explains the roster and every option.
+type into terminals, `summon` and `unsummon` need herdr-core, a terminal manager. Without
+it, `summon` prints the command to run in the repo, and you run `/harvest` and `/exit`
+yourself. If `/harvest` asks for a permission or asks a question, `unsummon` stops and
+leaves the answer to you. Run the commands in your main session, because `organism` is on the path of Claude's
+shell. [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md) explains the roster and every option.
 
 ## Commands
 
@@ -237,7 +237,7 @@ Five hooks run without any input from you:
 | Brief loading | Session start | Loads the nearest `HANDOFF.md` above the folder in which the session started, then lists the sessions that ran after it was written, each linked to its note. |
 | Session close | Session end | Adds the final exchange to the note, and runs the doc check if you turned it on. |
 | Publish guard | Before `Bash`, connector, web fetch and web search calls | Blocks a push, deploy, upload or web request that contains a term from your blocked list. |
-| Fleet log | Session start and end, and after `SendMessage` | Logs when an agent's session starts and stops, and the first line of each order and report. Does nothing until you write a roster. |
+| Agent log | Session start and end, and after `SendMessage` | Logs when an agent's session starts and stops, and the first line of each order and report. Does nothing until you write a roster. |
 
 The plugin also puts an `organism` command on the path of Claude's own shell, for
 maintenance. Ask Claude to run `organism help` for the list. `organism doctor` checks the
@@ -251,7 +251,7 @@ install.
 | git, python3 3.9 or later | Everything else. Standard library only, nothing to install with pip. |
 | macOS or Linux | CI runs the tests on both. Alerts show as notifications on macOS. |
 | node | The publish guard, once its list has terms. With terms and no node, the guard blocks every call that it checks until you install node or empty the list. |
-| herdr-core (optional) | `organism fleet up` and `down`, to open and type into terminals. |
+| herdr-core (optional) | `organism orchestrate summon` and `unsummon`, to open and type into terminals. |
 
 ## Optional extras
 

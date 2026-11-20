@@ -73,9 +73,9 @@
   <text class="s" x="626" y="378">HANDOFF.md in the repo</text>
   <text class="s" x="626" y="392">where the work stands</text>
 
-  <text class="lbl" x="390" y="300" text-anchor="end">fleet down:</text>
+  <text class="lbl" x="390" y="300" text-anchor="end">unsummon:</text>
   <text class="lbl" x="390" y="314" text-anchor="end">/harvest rewrites it, then /exit</text>
-  <text class="lbl" x="450" y="300">fleet up:</text>
+  <text class="lbl" x="450" y="300">summon:</text>
   <text class="lbl" x="450" y="314">a new session starts from it</text>
 
   <!-- the log -->

@@ -4,6 +4,24 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- A diagram of one main session with three agents, their briefs and the log, in the
+  README and in [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md).
+
+### Changed
+
+- `organism fleet` is now `organism orchestrate`, `up` is now `summon`, and `down` is now
+  `unsummon`. The commands do the same work as before, and the old names still work.
+- `docs/FLEET.md` is now `docs/ORCHESTRATE.md`.
+- These names stay as they were: the roster `~/.claude/state/organism-fleet.json`, the
+  log `~/.claude/state/fleet-ledger.jsonl`, the `ORGANISM_FLEET_*` variables, and the
+  events in the log.
+- A table written by `ledger --md` has a new first line and the heading "Ledger". A table
+  with the old first line is still replaced without `--force`.
+
 ## [0.4.0] - 2026-11-20
 
 ### Changed
@@ -45,7 +63,7 @@ never published on its own.
   - `--dry` on `up` and `down` prints the plan and changes nothing.
 - The fleet roster: a JSON file listing each agent's name, repo, model, effort, brief and
   role. `config/organism-fleet.example.json` is a copy to start from, and
-  [docs/FLEET.md](docs/FLEET.md) explains each field. Without a roster, nothing in the
+  [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md) explains each field. Without a roster, nothing in the
   fleet runs.
 - The fleet ledger, a log at `~/.claude/state/fleet-ledger.jsonl` that only grows. Hooks
   write it, so sessions started by hand count too. At session start it records `summon`
