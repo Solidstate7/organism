@@ -4,21 +4,29 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2026-11-19
+
+The first release since 0.1.2. It also brings the changes listed under 0.2.0, which was
+never published on its own.
 
 ### Added
 
-- `organism fleet`, for running several Claude Code sessions at once, one per repo. An
-  agent's life has four steps: summon (a fresh session in the repo), work (orders in,
-  reports out), harvest (`/handoff` rewrites the brief, then `/exit`) and resummon (the
-  next fresh session, which starts from that brief). Each fresh session is one generation.
-  - `fleet list`: each agent's state (live, harvested with the date of its brief, closed,
-    or never summoned), its number of generations and its role.
-  - `fleet up <name>` summons an agent, or resummons it when it has lived before. It
-    says which first. `summon` and `resummon` are other names for it.
-  - `fleet down <name>` harvests a live agent and stops if the brief was not rewritten.
-    `harvest` is another name for it. An agent with `"handoff": false` in the roster, or
-    `--no-handoff`, is closed without `/handoff`.
+- `organism fleet`, for running several Claude Code sessions at once, one per repo. Each
+  repo with its session is an agent. `fleet up` starts a new session in the agent's
+  repo. `fleet down` runs `/handoff` in it and then ends it with `/exit`. The next
+  `fleet up` starts from the brief that `/handoff` wrote.
+  - `fleet list`: each agent's state (running, stopped after `/handoff` with the date of
+    its brief, stopped without it, or never started), its number of sessions and its role.
+  - `fleet up <name>` says first whether the agent is new or starts again from its brief.
+    `summon` and `resummon` are other names for it. When Claude Code asks whether to
+    trust the repo's folder, it answers yes, and it answers no other prompt. Values in
+    the launch command are quoted for the shell, so a repo path with spaces works.
+  - `fleet down <name>` stops if the brief was not rewritten. `harvest` is another name
+    for it. An agent with `"handoff": false` in the roster, or `--no-handoff`, is closed
+    without `/handoff`. It acts only on the session in the agent's own terminal. It never
+    answers a dialog: if `/handoff` asks for a permission or a question, it stops and
+    leaves the session open. The one key it presses unasked is Esc, when `/exit` asks
+    about an unsent feedback draft.
   - `fleet ledger`: the log, filtered with `--since` and `--agent`, as JSON with
     `--json`, or written as a Markdown table to a file you name with `--md`. It never
     replaces a file it didn't write unless you add `--force`.
@@ -28,14 +36,52 @@ All notable changes to Organism are listed here. The format follows
   [docs/FLEET.md](docs/FLEET.md) explains each field. Without a roster, nothing in the
   fleet runs.
 - The fleet ledger, a log at `~/.claude/state/fleet-ledger.jsonl` that only grows. Hooks
-  write it, so sessions started by hand count too. Session start records a summon,
-  resummon or resume, with the session a resummon continues and the brief it starts from
-  (path, time and hash). Session end records a harvest when the brief was rewritten, or
-  a close and why. After `SendMessage`, it records an order, a report or a message
-  between agents. Only the first line of a message is kept, after secret redaction.
+  write it, so sessions started by hand count too. At session start it records `summon`
+  for a new agent, `resummon` for a session that starts from the last brief, or `resume`
+  for a reopened one. A resummon also records the brief's path, time and hash. At session end it
+  records `harvest` when the brief was rewritten, or `close` and the reason. After
+  `SendMessage`, it records an order, a report or a message between agents. Only the
+  first line of a message is kept, after secret redaction. Headless runs and messages to
+  a subagent inside one session are left out. After `/clear`, the new session counts as
+  a new start. A hook wired twice still writes each event once, and a roster it can't
+  read never fails a session.
 - herdr-core is optional. `fleet up` and `fleet down` use it to open and type into
   terminals. Without it, `up` prints the command to run in the repo, and `down` refuses
-  and says how to harvest by hand.
+  and says how to run `/handoff` and `/exit` by hand.
+
+### Changed
+
+- A session note in the vault stops growing at 300 KB. Obsidian can't open a vault that
+  holds notes of several megabytes. A longer session keeps its newest turns in the vault,
+  under a first line that names the full note. The full note goes to
+  `~/.claude/mirror-archive/sessions/<id>.md` (`CLAUDE_MIRROR_ARCHIVE_DIR` in
+  `paths.env` moves it). The reviews read the full note through that line, and
+  `/incognito purge` deletes the full note too. `obsidian-mirror.py --trim-oversize`
+  applies the cap to notes that were written before it. A reply that quotes a turn inside
+  a code block doesn't count as a turn, so the kept part starts at a real one.
+- The README says what the fleet commands do, how to update the plugin, and how
+  `/handoff` checks the brief. Its sentences are shorter and plainer.
+- CONTRIBUTING's release steps match how a release is made now: a version bump, a
+  changelog entry and a tag before the push.
+
+### Fixed
+
+- Session notes check every path that a tool call touched for `.organism-no-notes`, not
+  only the first five that the note shows. A Glob or Grep pattern that starts at `/` or
+  `~` counts as a path.
+- A connector call is marked outbound when the first verb in its name writes (create,
+  reply, forward). A name with no such verb counts as outbound when it writes all the
+  same (batch, execute, import, sync).
+- `/handoff` catches a commit hash that the new brief makes up, also in a list item that
+  starts with the hash. A run from a subfolder of a repo no longer fails, and it stages
+  the whole repo instead of only that subfolder.
+- The decisions page keeps a note that you added in the place where you put it.
+- `organism uninstall` after an install from a clone removes the fleet hook from
+  `settings.json` too. Before, it stayed behind and failed at every session start once
+  the clone was gone.
+- Tests: the brief-loading test no longer reads a pairings file that sits next to the
+  code outside its temporary folder, and the timing test counts turns in the full note
+  instead of the capped one.
 
 ## [0.2.0] - 2026-10-19
 
@@ -68,14 +114,6 @@ All notable changes to Organism are listed here. The format follows
   file, read only when it is used.
 - The README's hook table says the brief loader reads the nearest `HANDOFF.md`; its
   "writes only" line names the MOC page and the retro marker.
-- Session notes in the vault are capped at 300 KB: a longer session keeps its newest
-  turns there under a header line that names the full note, which is written outside
-  the vault to `~/.claude/mirror-archive/sessions/<id>.md` (`CLAUDE_MIRROR_ARCHIVE_DIR`
-  in `paths.env` moves it). Obsidian's indexer runs out of memory on multi-megabyte
-  notes and the window never opens; a 5 MB note did that on 2026-10-26. The reviews
-  read the full note through the header line, `/incognito purge` removes the archived
-  copy too, and `obsidian-mirror.py --trim-oversize` applies the cap to notes already
-  written.
 
 ## [0.1.2] - 2026-10-16
 
