@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-"""organism fleet: run a set of Claude Code sessions, one per repo, and keep a ledger of their lives.
+"""organism orchestrate: run a set of Claude Code sessions, one per repo, and keep a ledger of their lives.
 
-  organism fleet list                              every agent: lifecycle state, generations, brief date
-  organism fleet up <name> [--effort E] [--dry]    summon: start a fresh session in the agent's repo
-                                                   (resummon when it has lived before)
-  organism fleet down <name> [--no-handoff] [--dry]
-                                                   harvest: /harvest writes the brief, then /exit
-  organism fleet ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
+  organism orchestrate list                        every agent: lifecycle state, generations, brief date
+  organism orchestrate summon <name> [--effort E] [--dry]
+                                                   start a fresh session in the agent's repo
+                                                   (from its brief when it has lived before)
+  organism orchestrate unsummon <name> [--no-handoff] [--dry]
+                                                   /harvest writes the brief, then /exit
+  organism orchestrate ledger [--since 3d|12h|DATE] [--agent NAME] [--json] [--md PATH [--force]]
                                                    the ledger: every summon, order, report and harvest
 
-An agent's life has four steps. Summon starts a fresh session that reads only the agent's
-brief (HANDOFF.md). Work is the orders it gets and the reports it sends. Harvest runs
-/harvest, which rewrites the brief, and then /exit. Resummon starts the next fresh session
+`organism fleet`, `up` and `down` are the old names of `orchestrate`, `summon` and
+`unsummon`. They still work.
+
+An agent's life has four steps. `summon` starts a fresh session that reads only the agent's
+brief (HANDOFF.md). Work is the orders it gets and the reports it sends. `unsummon` runs
+/harvest, which rewrites the brief, and then /exit. The next `summon` starts a fresh session
 from that brief. Each new session is one generation.
 
 The roster is a JSON file, ~/.claude/state/organism-fleet.json ($ORGANISM_FLEET_CONFIG
-moves it); docs/FLEET.md has an example. Without that file the fleet hooks do nothing.
+moves it); docs/ORCHESTRATE.md has an example. Without that file the hooks here do nothing.
 
 The ledger is append-only JSON Lines, ~/.claude/state/fleet-ledger.jsonl
 ($ORGANISM_FLEET_LEDGER moves it). The hooks write it, so it also covers sessions started
@@ -27,10 +31,10 @@ by hand:
   PostToolUse   on SendMessage: order (to an agent), report (from an agent), message
                 (agent to agent). Only the first line is kept, after secret redaction.
 
-`up` and `down` drive the terminal through herdr-core (`hc`). Without it, `up` prints the
-command to run and `down` refuses (run /harvest and /exit in the session yourself).
-`up` answers one prompt itself: the folder-trust question, with Yes (the roster names the
-repo). `down` acts on the session running in the agent's terminal and answers no dialog:
+`summon` and `unsummon` drive the terminal through herdr-core (`hc`). Without it, `summon`
+prints the command to run and `unsummon` refuses (run /harvest and /exit in the session
+yourself). `summon` answers one prompt itself: the folder-trust question, with Yes (the
+roster names the repo). `unsummon` acts on the session running in the agent's terminal and answers no dialog:
 a permission request or a question during /harvest stops it with the session left open.
 The one key it presses unasked is Esc on /exit's unsent-feedback-draft dialog, which
 discards the draft. The hook never fails a session: a roster it can't read means no work.
@@ -54,13 +58,14 @@ HOME = os.environ.get("HOME") or os.path.expanduser("~")
 DEFAULT_LAUNCH = "claude --model {model} --effort {effort}"
 LIFE = ("summon", "resummon", "resume", "harvest", "close")
 LINE_MAX = 200
-MD_MARK = "<!-- written by organism fleet ledger; rewritten on each run -->"
+MD_MARK = "<!-- written by organism orchestrate ledger; rewritten on each run -->"
+MD_MARK_OLD = "<!-- written by organism fleet ledger; rewritten on each run -->"   # the mark's old wording
 NAME_RE = r"[A-Za-z0-9][A-Za-z0-9._-]*"
 STR_FIELDS = ("repo", "brief", "model", "effort", "launch", "role")
 
 
 def _tick():
-    """Seconds per second of waiting in up and down; tests shrink it with ORGANISM_FLEET_TICK."""
+    """Seconds per second of waiting in summon and unsummon; tests shrink it with ORGANISM_FLEET_TICK."""
     try:
         return max(float(os.environ.get("ORGANISM_FLEET_TICK") or 1), 0.0)
     except ValueError:
@@ -117,11 +122,11 @@ def load_config(strict=True):
         return raw
     except FileNotFoundError:
         if strict:
-            sys.exit(f"organism fleet: no roster at {p}\n  docs/FLEET.md shows the format "
+            sys.exit(f"organism orchestrate: no roster at {p}\n  docs/ORCHESTRATE.md shows the format "
                      "(ORGANISM_FLEET_CONFIG points elsewhere)")
     except (OSError, ValueError, TypeError, AttributeError) as ex:
         if strict:
-            sys.exit(f"organism fleet: the roster {p} can't be read: {ex}")
+            sys.exit(f"organism orchestrate: the roster {p} can't be read: {ex}")
     return None
 
 
@@ -231,7 +236,7 @@ def live_session(cfg, name, reg=None):
 def resolve_recipient(cfg, to):
     """(agent or None, label, known) for a SendMessage `to`. Known: an address (uds:, bridge:...),
     a live session's name or an agent in the roster. Anything else ("main", a subagent's name
-    or id) is a teammate inside one session, not fleet traffic."""
+    or id) is a teammate inside one session, not traffic between agents."""
     to = str(to or "")
     sock = to[4:] if to.startswith("uds:") else None
     for d in registry():
@@ -287,7 +292,7 @@ def open_start(h, sid):
 
 def on_session_start(cfg, p):
     if (os.environ.get("CLAUDE_CODE_ENTRYPOINT") or "cli") != "cli":
-        return                      # headless runs (claude -p, the SDK) are jobs, not fleet sessions
+        return                      # headless runs (claude -p, the SDK) are jobs, not agent sessions
     name = agent_for(cfg, os.environ.get("CLAUDE_PROJECT_DIR") or p.get("cwd"))
     sid, source = p.get("session_id"), p.get("source", "startup")
     if not name or not sid or source not in ("startup", "resume", "clear"):
@@ -321,7 +326,7 @@ def on_session_end(cfg, p):
     h = history(name)
     start = open_start(h, sid)
     if start is None:
-        return                      # not a fleet session (headless), or its end is already recorded
+        return                      # not an agent's session (headless), or its end is already recorded
     a = cfg["agents"][name]
     after = brief_facts(a["brief"])
     before = start.get("brief")
@@ -340,14 +345,14 @@ def on_send(cfg, p):
     if p.get("tool_name") != "SendMessage":
         return
     if (os.environ.get("CLAUDE_CODE_ENTRYPOINT") or "cli") != "cli":
-        return                      # a headless run's messages are a job's, not a fleet session's
+        return                      # a headless run's messages are a job's, not an agent session's
     ti = p.get("tool_input") or {}
     sender = agent_for(cfg, os.environ.get("CLAUDE_PROJECT_DIR") or p.get("cwd"))
     to_agent, to_label, known = resolve_recipient(cfg, ti.get("to"))
     if not known:
         return                      # "main" or a subagent: a message inside one session
     if to_agent and to_agent == sender:
-        to_agent = None             # a session writing to its own repo's other session: not fleet traffic
+        to_agent = None             # a session writing to its own repo's other session: not traffic between agents
     if to_agent and sender:
         kind = "message"
     elif to_agent:
@@ -358,7 +363,7 @@ def on_send(cfg, p):
         return
     me = own_session()
     ev = {"event": kind, "session": p.get("session_id"), "agent": to_agent if kind == "order" else sender,
-          "from": sender or me.get("name") or "outside the fleet", "to": to_agent or to_label,
+          "from": sender or me.get("name") or "outside the roster", "to": to_agent or to_label,
           "line": first_line(ti.get("message", ""))}
     use = p.get("tool_use_id")
     if use:
@@ -414,7 +419,7 @@ def cmd_hook():
         finally:
             os.close(fd)
     except BaseException as ex:   # the ledger is a record, not a gate
-        print(f"organism fleet hook: {type(ex).__name__}: {ex}", file=sys.stderr)
+        print(f"organism orchestrate hook: {type(ex).__name__}: {ex}", file=sys.stderr)
     return 0
 
 
@@ -503,7 +508,7 @@ def launch_line(cfg, a, effort):
     try:
         return tpl.format(**{k: shlex.quote(str(v)) for k, v in vals.items()})
     except (KeyError, IndexError, ValueError, AttributeError) as ex:
-        sys.exit(f"organism fleet: the launch template {tpl!r} can't be filled ({type(ex).__name__}: {ex}).\n"
+        sys.exit(f"organism orchestrate: the launch template {tpl!r} can't be filled ({type(ex).__name__}: {ex}).\n"
                  "  It may use {model} {effort} {name} {repo}; write {{ and }} for a literal brace.")
 
 
@@ -567,7 +572,7 @@ def cmd_list(cfg):
         b = brief_facts(a["brief"])
         rows.append((n, st, str(generations(n, evs)), short(b["mtime"]) if b else "none", what(a)))
     if not rows:
-        print("organism fleet: the roster has no agents")
+        print("organism orchestrate: the roster has no agents")
         return
     w = [max(len(r[i]) for r in rows + [("agent", "state", "gen", "brief", "")]) for i in range(4)]
     print(f"{'agent':{w[0]}}  {'state':{w[1]}}  {'gen':>{w[2]}}  {'brief':{w[3]}}  role")
@@ -576,7 +581,7 @@ def cmd_list(cfg):
 
 
 def cmd_up(cfg, name, effort=None, dry=False):
-    a = cfg["agents"].get(name) or sys.exit(f"organism fleet: no agent {name} in the roster (see fleet list)")
+    a = cfg["agents"].get(name) or sys.exit(f"organism orchestrate: no agent {name} in the roster (see orchestrate list)")
     a["name"] = name
     st, s, last = lifecycle(cfg, name)
     if s:
@@ -623,19 +628,19 @@ def cmd_up(cfg, name, effort=None, dry=False):
             ev = next((e for e in reversed(history(name)) if e.get("session") == s.get("sessionId")), None)
             led = (f"ledger: {ev['event']}, generation {ev.get('generation', '?')}" if ev
                    else "ledger: no event yet (are the Organism hooks loaded?)")
-            print(f"up: {s.get('name')}  session {s.get('sessionId')}  socket {s.get('messagingSocketPath')}  {led}")
+            print(f"summoned: {s.get('name')}  session {s.get('sessionId')}  socket {s.get('messagingSocketPath')}  {led}")
             return 0
     sys.exit(f"{name} not ready after 3 minutes; screen tail:\n" + hd.screen(name)[-800:])
 
 
 def cmd_down(cfg, name, handoff=True, dry=False):
-    a = cfg["agents"].get(name) or sys.exit(f"organism fleet: no agent {name} in the roster")
+    a = cfg["agents"].get(name) or sys.exit(f"organism orchestrate: no agent {name} in the roster")
     hd = herdr(cfg)
     if hd is None:
-        sys.exit("organism fleet down needs herdr-core (hc) to type into the session. "
-                 "Harvest it by hand: run /harvest in the session, then /exit.")
+        sys.exit("organism orchestrate unsummon needs herdr-core (hc) to type into the session. "
+                 "Do it by hand: run /harvest in the session, then /exit.")
     if not live_session(cfg, name) or name not in hd.terminals():
-        sys.exit(f"{name} is not live in a fleet terminal")
+        sys.exit(f"{name} is not live in a terminal that summon opened")
     s = terminal_session(cfg, name, hd)
     if s is None:
         sys.exit(f"no Claude session of {name} runs in its terminal {name}; nothing was typed")
@@ -691,7 +696,7 @@ def cmd_down(cfg, name, handoff=True, dry=False):
     hd.sh("rm", name)
     ev = next((e for e in reversed(history(name)) if e.get("session") == s.get("sessionId")
                and e["event"] in ("harvest", "close")), None)
-    print(f"down: {s.get('name')} closed; " + (f"ledger: {ev['event']}" if ev else "ledger: no event (are the Organism hooks loaded?)"))
+    print(f"unsummoned: {s.get('name')} closed; " + (f"ledger: {ev['event']}" if ev else "ledger: no event (are the Organism hooks loaded?)"))
     return 0
 
 
@@ -703,7 +708,7 @@ def parse_since(v):
     try:
         t = datetime.datetime.fromisoformat(v)
     except (TypeError, ValueError):
-        sys.exit(f"organism fleet: --since takes 3d, 12h, a date or a time, not {v!r}")
+        sys.exit(f"organism orchestrate: --since takes 3d, 12h, a date or a time, not {v!r}")
     return t if t.tzinfo else t.astimezone()
 
 
@@ -747,16 +752,16 @@ def cmd_ledger(args):
     if "--md" in args:
         i = args.index("--md") + 1
         if i >= len(args):
-            sys.exit("organism fleet: --md needs a path")
+            sys.exit("organism orchestrate: --md needs a path")
         path = os.path.expanduser(args[i])
         try:
             with open(path, encoding="utf-8") as fh:
-                ours = fh.readline().strip() == MD_MARK
+                ours = fh.readline().strip() in (MD_MARK, MD_MARK_OLD)
         except FileNotFoundError:
             ours = True
         if not ours and "--force" not in args:
-            sys.exit(f"organism fleet: {path} exists and was not written by fleet ledger; --force replaces it")
-        out = [MD_MARK, "", "# Fleet ledger", "", f"{len(evs)} events, written {now()[:16].replace('T', ' ')}.", "",
+            sys.exit(f"organism orchestrate: {path} exists and was not written by orchestrate ledger; --force replaces it")
+        out = [MD_MARK, "", "# Ledger", "", f"{len(evs)} events, written {now()[:16].replace('T', ' ')}.", "",
                "| When | Event | Agent | What |", "|---|---|---|---|"]
         for e in evs:
             cell = describe(e).replace("|", "\\|")
@@ -765,10 +770,10 @@ def cmd_ledger(args):
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write("\n".join(out) + "\n")
         os.replace(tmp, path)
-        print(f"organism fleet: {len(evs)} events written to {path}")
+        print(f"organism orchestrate: {len(evs)} events written to {path}")
         return 0
     if not evs:
-        print("organism fleet: the ledger has no events" + (" in that range" if "--since" in args else ""))
+        print("organism orchestrate: the ledger has no events" + (" in that range" if "--since" in args else ""))
     for e in evs:
         print(f"{e.get('ts', '')[:16].replace('T', ' ')}  {e['event']:8}  {(e.get('agent') or '-'):16}  {describe(e)}")
     return 0
@@ -788,9 +793,9 @@ def main(a):
     if a[0] == "list":
         cmd_list(cfg)
         return 0
-    if a[0] in ("up", "summon", "resummon") and len(a) > 1:
+    if a[0] in ("summon", "resummon", "up") and len(a) > 1:
         return cmd_up(cfg, a[1], opt("--effort"), flag("--dry"))
-    if a[0] in ("down", "harvest") and len(a) > 1:
+    if a[0] in ("unsummon", "down", "harvest") and len(a) > 1:
         return cmd_down(cfg, a[1], not flag("--no-handoff"), flag("--dry"))
     print(__doc__.split("\nRun:")[0], file=sys.stderr)
     return 2

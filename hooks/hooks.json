@@ -1,5 +1,5 @@
 {
-  "description": "Organism's hooks: the publish guard, the handoff brief at session start, the session mirror, and the fleet ledger",
+  "description": "Organism's hooks: the publish guard, the handoff brief at session start, the session mirror, and the log of agent sessions",
   "hooks": {
     "PreToolUse": [
       {

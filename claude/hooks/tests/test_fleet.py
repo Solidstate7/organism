@@ -11,9 +11,9 @@
   - SendMessage: order, report and agent-to-agent message, first line only, redacted, clipped;
     in-process recipients (main, a subagent) and headless senders add nothing; one tool
     call is recorded once however many times the hook runs
-  - fleet list: live, harvested, closed, never summoned, generations
-  - fleet ledger: --since, --agent, --json, --md (never over a file it didn't write)
-  - up without herdr-core prints the command (shell-quoted; a bad template is named);
+  - orchestrate list: live, harvested, closed, never summoned, generations
+  - orchestrate ledger: --since, --agent, --json, --md (never over a file it didn't write)
+  - summon without herdr-core prints the command (shell-quoted; a bad template is named);
     down without it refuses; down --dry plans
   - down against a fake hc: it picks the session in the agent's terminal, stops on a
     dialog without answering it, clears a garbled command from the box, and presses Esc
@@ -146,7 +146,7 @@ def test_no_roster():
     check("a broken roster: the hook still exits 0, silent, no ledger",
           r.returncode == 0 and r.stdout == "" and not os.path.exists(b.ledger))
     r = b.run("list")
-    check("…but fleet list says the roster can't be read", r.returncode != 0 and "can't be read" in r.stderr)
+    check("…but orchestrate list says the roster can't be read", r.returncode != 0 and "can't be read" in r.stderr)
     for label, text in (("agents as an object", '{"agents": {"web": {"repo": "~/dev/web"}}}'),
                         ("null", "null"), ("a list", "[]"),
                         ("a number as a name", '{"agents": [{"name": 5, "repo": "~/dev/web"}]}'),
@@ -319,7 +319,7 @@ def test_messages():
 
 
 def test_list_and_ledger():
-    print("cli: fleet list and fleet ledger")
+    print("cli: orchestrate list and orchestrate ledger")
     b = Box()
     b.session_file(FAKE_PID, sessionId="x", name="me")
     b.brief("web", "w\n")
@@ -366,7 +366,7 @@ def test_list_and_ledger():
     r = b.run("ledger", "--md", md)
     with open(md) as fh:
         text = fh.read()
-    check("--md writes a table with the mark", r.returncode == 0 and text.startswith("<!-- written by organism fleet")
+    check("--md writes a table with the mark", r.returncode == 0 and text.startswith("<!-- written by organism orchestrate")
           and "| When | Event | Agent | What |" in text and "continues w1" in text)
     b.run("ledger", "--md", md)
     check("…and rewrites its own file", r.returncode == 0)
@@ -399,27 +399,27 @@ def fake_hc(home, terminals, state="idle", fg=None):
 
 
 def test_up_down():
-    print("cli: up and down")
+    print("cli: summon and unsummon")
     b = Box()
-    r = b.run("up", "api")
-    check("up without herdr-core prints the command for the agent's repo",
+    r = b.run("summon", "api")
+    check("summon without herdr-core prints the command for the agent's repo",
           r.returncode == 0 and f"cd {b.repos['api']} && claude --model sonnet --effort xhigh --name api" in r.stdout)
     check("…and calls it a summon, generation 1", "summon api" in r.stdout and "generation 1" in r.stdout
           and "resummon" not in r.stdout)
-    r = b.run("up", "api", "--effort", "low")
+    r = b.run("summon", "api", "--effort", "low")
     check("--effort overrides the roster", "--effort low" in r.stdout)
     b.session_file(FAKE_PID, sessionId="x", name="me")
     b.brief("api", "b\n")
     b.start("api", "a1")
     b.brief("api", "c\n")
     b.end("api", "a1")
-    r = b.run("summon", "api")
-    check("up on a harvested agent: a resummon, generation 2, from its brief",
+    r = b.run("up", "api")
+    check("up, the old name, on a harvested agent: a resummon, generation 2, from its brief",
           "resummon api" in r.stdout and "generation 2" in r.stdout and "from the brief of" in r.stdout)
-    r = b.run("up", "nobody")
-    check("up on an unknown agent is refused", r.returncode != 0 and "no agent nobody" in r.stderr)
-    r = b.run("down", "api")
-    check("down without herdr-core refuses and says how to harvest by hand",
+    r = b.run("summon", "nobody")
+    check("summon on an unknown agent is refused", r.returncode != 0 and "no agent nobody" in r.stderr)
+    r = b.run("unsummon", "api")
+    check("unsummon without herdr-core refuses and says how to harvest by hand",
           r.returncode != 0 and "/harvest" in r.stderr and "/exit" in r.stderr)
 
     hc = fake_hc(b.home, ["notes", "web"])
@@ -427,8 +427,8 @@ def test_up_down():
     b.write_config()
     live = str(os.getpid())
     b.session_file(live, sessionId="n-live", name="notes-2", cwd=b.repos["notes"])
-    r = b.run("down", "notes", "--dry")
-    check("down --dry on a handoff-off agent: plans a close without /harvest",
+    r = b.run("unsummon", "notes", "--dry")
+    check("unsummon --dry on a handoff-off agent: plans a close without /harvest",
           r.returncode == 0 and "close notes" in r.stdout and "no /harvest" in r.stdout and "handoff is off" in r.stdout)
     with open(os.path.join(b.home, "hc.log")) as fh:
         log = fh.read()
@@ -437,21 +437,21 @@ def test_up_down():
     r = b.run("harvest", "web", "--dry")
     check("harvest --dry on a normal agent: plans /harvest, /exit, kill, rm",
           r.returncode == 0 and "harvest web" in r.stdout and "/harvest, /exit" in r.stdout)
-    r = b.run("down", "web", "--no-handoff", "--dry")
+    r = b.run("unsummon", "web", "--no-handoff", "--dry")
     check("--no-handoff: plans a close", "close web" in r.stdout and "--no-handoff" in r.stdout)
-    r = b.run("up", "web", "--dry")
-    check("up on a live agent says where it lives and starts nothing",
+    r = b.run("summon", "web", "--dry")
+    check("summon on a live agent says where it lives and starts nothing",
           r.returncode == 0 and "already live: web-2" in r.stdout)
     os.remove(os.path.join(b.sessions, f"{live}.json"))
-    r = b.run("up", "web", "--dry")
-    check("up --dry with herdr-core prints what it would run", r.returncode == 0 and "would run:" in r.stdout)
-    r = b.run("down", "web")
-    check("down on an agent that isn't live is refused", r.returncode != 0 and "not live" in r.stderr)
+    r = b.run("summon", "web", "--dry")
+    check("summon --dry with herdr-core prints what it would run", r.returncode == 0 and "would run:" in r.stdout)
+    r = b.run("unsummon", "web")
+    check("unsummon on an agent that isn't live is refused", r.returncode != 0 and "not live" in r.stderr)
 
     hc = fake_hc(b.home, ["web"], state="working")
     b.session_file(live, sessionId="w-live", name="web-2", cwd=b.repos["web"])
-    r = b.run("down", "web")
-    check("down on a working agent is refused", r.returncode != 0 and "working" in r.stderr)
+    r = b.run("unsummon", "web")
+    check("unsummon on a working agent is refused", r.returncode != 0 and "working" in r.stderr)
     b.done()
 
 
@@ -557,62 +557,62 @@ def test_launch_quoting():
     spaced = os.path.join(b.home, "dev", "my shop")
     os.makedirs(spaced)
     b.write_config({"agents": [{"name": "shop", "repo": spaced}]})
-    r = b.run("up", "shop")
+    r = b.run("summon", "shop")
     check("a repo path with a space is quoted in the cd and in {repo}",
           r.returncode == 0 and f"cd '{spaced}' && claude" in r.stdout)
     b.write_config({"agents": [{"name": "shop", "repo": spaced, "launch": "claude --add-dir {repo} --name {name}"}]})
-    r = b.run("up", "shop")
+    r = b.run("summon", "shop")
     check("…and in the template's {repo}", f"--add-dir '{spaced}' --name shop" in r.stdout)
     b.write_config({"launch": "claude --settings '{\"x\": 1}' --model {model}"})
-    r = b.run("up", "web")
+    r = b.run("summon", "web")
     check("literal braces in the template: a clear error, no traceback",
           r.returncode != 0 and "Traceback" not in r.stderr and "{{" in r.stderr)
     b.write_config({"launch": "claude --model {modle}"})
-    r = b.run("up", "web")
+    r = b.run("summon", "web")
     check("an unknown field in the template is named, no traceback",
           r.returncode != 0 and "Traceback" not in r.stderr and "modle" in r.stderr)
     b.done()
 
 
 def test_down_driver():
-    print("cli: down against a stateful fake hc")
+    print("cli: unsummon against a stateful fake hc")
     b = Box()
     # finding: down waits on the session in the agent's terminal, not the newest one in the repo
     term_pid = orphan()
     b.session_file(term_pid, sessionId="w-term", name="web-term", cwd=b.repos["web"], startedAt=1)
     b.session_file(os.getpid(), sessionId="w-hand", name="web-by-hand", cwd=b.repos["web"], startedAt=2)
     stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid)
-    r = b.run("down", "web", "--dry")
-    check("two live sessions in the repo: down picks the one in the agent's terminal",
+    r = b.run("unsummon", "web", "--dry")
+    check("two live sessions in the repo: unsummon picks the one in the agent's terminal",
           r.returncode == 0 and "w-term" in r.stdout and "w-hand" not in r.stdout)
     stateful_hc(b, {"web": {"pid": 1, "fg": 999999}}, term_pid)
-    r = b.run("down", "web", "--dry")
-    check("no session runs in the agent's terminal: down refuses", r.returncode != 0 and "terminal" in r.stderr)
+    r = b.run("unsummon", "web", "--dry")
+    check("no session runs in the agent's terminal: unsummon refuses", r.returncode != 0 and "terminal" in r.stderr)
     os.remove(os.path.join(b.sessions, f"{os.getpid()}.json"))
 
     # a garbled /harvest is cleared from the box
     stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, drop="v")
-    r = b.run("down", "web")
+    r = b.run("unsummon", "web")
     st = hc_state(b)
-    check("a command that didn't type cleanly: down stops", r.returncode != 0)
+    check("a command that didn't type cleanly: unsummon stops", r.returncode != 0)
     check("…and the box is empty again, so the next Enter runs nothing", st["box"] == "")
     check("…and no Enter was pressed", not any(l[:1] == ["keys"] and "enter" in l for l in hc_log(b)))
 
     # a dialog during /harvest is never answered
     stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, handoff="blocked")
-    r = b.run("down", "web")
+    r = b.run("unsummon", "web")
     enters = [l for l in hc_log(b) if l[:1] == ["keys"] and "enter" in l]
-    check("a dialog during /harvest: down stops and says so",
+    check("a dialog during /harvest: unsummon stops and says so",
           r.returncode != 0 and "dialog" in r.stderr and "Traceback" not in r.stderr)
     check("…without pressing Enter on it", len(enters) == 1 and not hc_state(b).get("entered_on_dialog"))
     check("…and the session stays", alive(term_pid))
 
     # the unsent-feedback dialog after /exit gets Esc, and only Esc
     stateful_hc(b, {"web": {"pid": 1, "fg": term_pid}}, term_pid, feedback=True)
-    r = b.run("down", "web")
+    r = b.run("unsummon", "web")
     log = hc_log(b)
     keys = [k for l in log if l[:1] == ["keys"] for k in l[2:]]
-    check("the unsent-feedback dialog: down presses Esc and finishes",
+    check("the unsent-feedback dialog: unsummon presses Esc and finishes",
           r.returncode == 0 and keys.count("esc") == 1 and not hc_state(b).get("entered_on_dialog"))
     check("…says the draft was discarded", "feedback" in r.stdout)
     check("…and the session is gone, its terminal killed and removed",
@@ -623,17 +623,21 @@ def test_down_driver():
 
 
 def test_dispatch():
-    print("cli: organism fleet")
+    print("cli: organism orchestrate")
     b = Box()
-    r = subprocess.run(["sh", os.path.join(ROOT, "bin", "organism"), "fleet", "--help"], capture_output=True,
+    r = subprocess.run(["sh", os.path.join(ROOT, "bin", "organism"), "orchestrate", "--help"], capture_output=True,
                        text=True, env=b.env(), timeout=30)
-    check("organism fleet --help names the lifecycle",
-          r.returncode == 0 and "summon" in r.stdout and "harvest" in r.stdout and "resummon" in r.stdout)
+    check("organism orchestrate --help names the commands",
+          r.returncode == 0 and "orchestrate summon" in r.stdout and "orchestrate unsummon" in r.stdout
+          and "/harvest" in r.stdout)
+    old = subprocess.run(["sh", os.path.join(ROOT, "bin", "organism"), "fleet", "--help"], capture_output=True,
+                         text=True, env=b.env(), timeout=30)
+    check("organism fleet, the old name, still runs it", old.returncode == 0 and old.stdout == r.stdout)
     r = subprocess.run(["sh", os.path.join(ROOT, "bin", "organism"), "help"], capture_output=True,
                        text=True, env=b.env(), timeout=30)
-    check("organism help lists fleet", "organism fleet" in r.stdout)
+    check("organism help lists orchestrate", "organism orchestrate" in r.stdout and "organism fleet" not in r.stdout)
     r = b.run("bogus")
-    check("an unknown fleet command exits 2 with the usage", r.returncode == 2 and "fleet list" in r.stderr)
+    check("an unknown command exits 2 with the usage", r.returncode == 2 and "orchestrate list" in r.stderr)
     b.done()
 
 
