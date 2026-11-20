@@ -170,6 +170,8 @@ by hand. In a repo, `organism adr-link <command>`:
 
 - `query <N|hash>` returns the commits for a decision, or the decision for a commit.
 - `link <commit> <N…>` joins them by hand.
+- `link-session --list` prints the work commits since the last harvest, each with its
+  record or `none`.
 - `backfill` builds links from older history (commit messages that mention a record).
 - `backlinks write` rewrites the list of linked commits at the end of each record.
 

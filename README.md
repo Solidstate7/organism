@@ -78,8 +78,9 @@ code and get back to the sentence in which you asked for it.
 ## What a harvest does
 
 You ask for it once, at the end of a session: "harvest this session" is enough. It
-commits the work and writes each decision that the session made as a record. Then it links the records to the commits that carry
-them out, and rewrites the brief for the next session.
+commits the work and writes each decision that the session made as a record. Then it
+links each record to the commits that carry it out, and rewrites the brief for the next
+session.
 
 ![The eight steps of a harvest in four jobs. Settle the code: read the repo, commit the work first. Record the reasons: find the decisions, write the records, show the draft, commit the records. Link records to commits. Hand over: rewrite the brief. Each step carries the problem it prevents.](docs/img/handoff.svg)
 
@@ -92,7 +93,7 @@ that touch git, and they are skipped outside a repository.
 
 | File | What it holds |
 |---|---|
-| `docs/adr/NNNN-title.md` (or the repo's existing ADR folder) | One decision per file: the situation, the choice, what it costs and enables, the alternatives. Numbered in order and dated. |
+| `docs/adr/NNNN-title.md` (or the repo's existing ADR folder) | One decision per file: the situation, who made the choice, the choice, what it costs and enables, the alternatives. Numbered in order and dated. |
 | `CLAUDE.md`, under "Decisions" | One line per record, newest first, the 20 most recent plus a link to the rest. Claude Code loads `CLAUDE.md` at every session start, so the decisions are known before the first prompt. |
 | git notes on the commits | The link between a record and its commits. Each record lists its commits, and each commit names its record. |
 | `HANDOFF.md` | The brief: where things stand, what's live, what comes next. Kept out of git in a repo, written at the vault root outside one, and loaded into the next session automatically. |
@@ -127,6 +128,20 @@ had and the new one dropped.
   the approval.
 - A session with no decision produces only the brief.
 
+A session can hold several decisions, and the harvest writes one record for each. A
+choice counts as one decision when you could undo it and keep the others. It also needs
+commits of its own, so two choices that sit in the same commits become one record. When
+you chose something and nothing was built yet, the harvest still writes the record and
+says so in it.
+
+Claude divides the session into decisions, and it can get this wrong. The draft shows
+each record with its commits. If the division is wrong, tell Claude to merge two
+records, divide one or move a commit, and it fixes the records and the links. Under
+"Changed without a decision", the draft also lists the commits that belong to no record.
+Those are routine edits, fixes, and choices that Claude made without asking you. The
+records are therefore not a full account of the session. They hold the decisions that
+were talked about, and that list shows you the rest.
+
 ### What you can add
 
 Anything that you say with the request steers the harvest. If you say what comes next,
@@ -143,7 +158,8 @@ says how far to trust them.
 The links change how you review. Open a record and it lists the commits that carry it
 out. You can then read each diff against the reason that it was meant to serve. Start
 from a commit and it names its decision, so a change with no decision behind it stands
-out.
+out. Claude uses the links in the same way. At the start of a session it is told to read
+the record behind a piece of code before it changes it.
 
 ## Session notes
 
@@ -207,7 +223,7 @@ Five hooks run without any input from you:
 | Hook | When | What it does |
 |---|---|---|
 | Session notes | After every reply | Adds the exchange to the session's note in the vault. |
-| Brief loading | Session start | Loads the nearest `HANDOFF.md` above the folder in which the session started, then lists the sessions that ran after it was written, each linked to its note. |
+| Brief loading | Session start | Loads the nearest `HANDOFF.md` above the folder in which the session started, then lists the sessions that ran after it was written, each linked to its note. In a project with decision records, it also tells Claude to read the record behind code before changing it. |
 | Session close | Session end | Adds the final exchange to the note, and runs the doc check if you turned it on. |
 | Publish guard | Before `Bash`, connector, web fetch and web search calls | Blocks a push, deploy, upload or web request that contains a term from your blocked list. |
 | Agent log | Session start and end, and after `SendMessage` | Logs when an agent's session starts and stops, and the first line of each order and report. Does nothing until you write a roster. |

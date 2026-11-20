@@ -10,6 +10,10 @@ All notable changes to Organism are listed here. The format follows
 
 - A diagram of one main session with three agents, their briefs and the log, in the
   README and in [docs/ORCHESTRATE.md](docs/ORCHESTRATE.md).
+- `organism adr-link link-session --list` prints the work commits since the last harvest,
+  each with the record it is linked to or `none`. It writes nothing.
+- At session start, a project whose `CLAUDE.md` has a "Decisions" index gets one more
+  paragraph. It tells Claude to read the record behind code before changing that code.
 
 ### Changed
 
@@ -25,6 +29,13 @@ All notable changes to Organism are listed here. The format follows
   install lines stay.
 - The README says to ask for a harvest at the end of every session, not only after a
   session that made a decision.
+- A harvest that finds several decisions links each record to its own commits. Before, it
+  linked every commit of the session to every new record.
+- The harvest decides what one decision is with three checks: the choice can be undone
+  alone, it has its own commits, and a choice with no commit yet still gets a record.
+  Two choices in the same commits become one record.
+- The harvest draft shows each record's commits and who made the choice. It lists the
+  commits that belong to no record under "Changed without a decision".
 - A table written by `ledger --md` has a new first line and the heading "Ledger". A table
   with the old first line is still replaced without `--force`.
 
