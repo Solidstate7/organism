@@ -120,7 +120,7 @@ Then run `organism adr-link link-session --list --since "<session start>"` once 
 
 ## 1.5. Refresh the record↔commit link index
 
-Whenever `<root>` is a git repo, `<adrdir>` exists and `organism adr-link` is available, even when step 1 harvested nothing (new commits may name existing records): `organism adr-link backfill` (promotes `ADR:`/`DEC-` references into `git notes --ref=adr`, local only, never pushed), then `organism adr-link backlinks write` (regenerates the `<!-- adr-links -->` block in each record). If `git status --short -- <adrdir>` shows changes 1g didn't commit: `git commit -m "docs(adr): refresh ADR↔commit link index" -m "ADR: none" -- <adrdir>`. Mechanical, not a decision, not gated. A git error here is reported and ignored.
+Whenever `<root>` is a git repo, `<adrdir>` exists and `organism adr-link` is available, even when step 1 harvested nothing (new commits may name existing records): `organism adr-link backfill` (promotes `ADR:`/`DEC-` references into `git notes --ref=adr`, local only, never pushed; for a commit with no note, as in a fresh clone, it first restores the links from the list in each record), then `organism adr-link backlinks write` (regenerates the `<!-- adr-links -->` block in each record). If `git status --short -- <adrdir>` shows changes 1g didn't commit: `git commit -m "docs(adr): refresh ADR↔commit link index" -m "ADR: none" -- <adrdir>`. Mechanical, not a decision, not gated. A git error here is reported and ignored.
 
 ## 1.6. Push, only when the note asks (git repos only)
 

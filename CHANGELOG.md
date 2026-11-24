@@ -9,6 +9,12 @@ All notable changes to Organism are listed here. The format follows
 ### Fixed
 
 - The publish guard now also checks mail replies and forwards sent through a connector.
+- The links between records and commits are no longer lost in a fresh clone. They were
+  kept only in git notes, and git doesn't push notes. In a clone, the next harvest then
+  emptied the list of commits in each record. Organism now reads the links from those
+  lists when a commit has no note, and a harvest writes them back as notes. A line of
+  such a list also stays when the clone doesn't have its commit, as in a shallow clone
+  or after a squash merge.
 
 ## [0.5.0] - 2026-11-20
 

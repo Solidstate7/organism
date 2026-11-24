@@ -30,7 +30,7 @@ works on its own:
 |---|---|---|
 | doc check | the fenced status table on each repo's vault page (branch, commit, uncommitted files, record count) | saying yes to it in setup |
 | `/harvest` | the decision records and the brief | a session worth recording, or a past worth reconstructing |
-| decision links | record ↔ commit, both directions, as git notes | nothing; `/harvest` links as it records |
+| decision links | record ↔ commit, both directions, as git notes and as a list in each record | nothing; `/harvest` links as it records |
 
 **New repo:** its page starts with a table reading `0 ADR(s)`. That's honest, not broken:
 the first `/harvest` creates `docs/adr/`, and the next doc check run shows the count as 1

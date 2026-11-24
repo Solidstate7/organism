@@ -98,7 +98,7 @@ them.
 |---|---|
 | `docs/adr/NNNN-title.md` (or the repo's existing ADR folder) | One decision per file: the situation, who made the choice, the choice, what it costs and what it makes possible, the alternatives. Numbered in order and dated. |
 | `CLAUDE.md`, under "Decisions" | One line per record, newest first, the 20 most recent plus a link to the rest. Claude Code loads `CLAUDE.md` at every session start, so Claude knows the decisions before your first prompt. |
-| git notes on the commits | The link between a record and its commits. Each record lists its commits, and each commit names its record. |
+| git notes on the commits | The link between a record and its commits. Each record lists its commits, and each commit names its record. Git doesn't push notes, so in a clone Organism reads the links from the list in each record. |
 | `HANDOFF.md` | The brief: where things stand, what's live, what comes next. Kept out of git in a repo, written at the vault root outside one, and loaded into the next session automatically. |
 
 A record is never renumbered, rewritten or deleted. A wrong record is superseded by a

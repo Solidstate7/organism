@@ -9,6 +9,10 @@
 # never linked, and --all lifts the bound. Options go before the ADR numbers, and a
 # number with no record is reported, not linked. The ADR dir resolves like /harvest
 # step 1a: .adr-dir, a log4brains config, the usual folder names in order, docs/adr.
+# Notes are local, so a clone has none. There the links come from the lists that
+# `backlinks write` put into the records. A command that only reads uses the lists as
+# they are, and a command that writes first restores them as notes. A note that exists
+# is never replaced. A line whose commit is not in the clone stays in the list.
 # Self-contained under mktemp; never touches a real repo.
 # Run:  bash claude/hooks/tests/test_adr_link.sh
 set -u
@@ -227,5 +231,78 @@ bash "$AL" link-session --list 1 >/dev/null 2>&1; rc=$?
 check "--list with a number is refused (exit 2)"          "$( [ "$rc" = 2 ] && echo 1 || echo 0)"
 l=$(bash "$AL" link-session --list --since "200 seconds ago" 2>/dev/null)
 check "--list keeps the time bound"                       "$( inq "$l" "$WC" && ! inq "$l" "$WA" && echo 1 || echo 0)"
+
+say "a fresh clone has no notes: the lists in the records hold the links"
+fresh "$T/origin"
+# no ADR trailer on these commits: a trailer, even `ADR: none`, already counts as a link.
+# No hooks either, so a commit-msg hook on this machine can't ask for the trailer.
+cn() { git add -A; GIT_AUTHOR_DATE="$((NOW - $1)) +0000" GIT_COMMITTER_DATE="$((NOW - $1)) +0000" git -c core.hooksPath=/dev/null commit -q -m "$2"; git rev-parse --short HEAD; }
+echo a > a.py;  CA=$(cn 500 "feat: implement the store")
+echo b > b.py;  CB=$(cn 400 "feat: the queue")
+echo c > c.py;  CC=$(cn 300 "fix: a typo")
+mkdir -p docs/adr; printf '# 0001. First\n' > docs/adr/0001-first.md; printf '# 0002. Second\n' > docs/adr/0002-second.md
+ca 200 "docs(adr): record the first two" >/dev/null
+bash "$AL" link "$CA" 1 >/dev/null 2>&1; bash "$AL" link "$CB" 1 2 >/dev/null 2>&1
+bash "$AL" backlinks write >/dev/null 2>&1; ca 100 "docs(adr): refresh the link index" >/dev/null
+clone() { git clone -q "$T/origin" "$1" 2>/dev/null; cd "$1" || exit 1; git config user.email t@test.invalid; git config user.name t; }
+lists() { cat docs/adr/0001-first.md docs/adr/0002-second.md; }
+clone "$T/clone"
+check "the clone has no notes"                            "$( [ -z "$(git notes --ref=adr list 2>/dev/null)" ] && echo 1 || echo 0)"
+q=$(bash "$AL" query 1 2>/dev/null)
+check "a record still names both of its commits"          "$( inq "$q" "$CA" && inq "$q" "$CB" && echo 1 || echo 0)"
+k=$(bash "$AL" query "$CB" 2>/dev/null)
+check "a commit still names both of its records"          "$( inq "$k" 'ADR-0001' && inq "$k" 'ADR-0002' && echo 1 || echo 0)"
+st=$(bash "$AL" state 2>/dev/null)
+check "state: only the typo fix is unlinked"              "$(printf '%s\n' "$st" | grep -qx 'unlinked=1' && echo 1 || echo 0)"
+check "state: both records count as built"                "$(printf '%s\n' "$st" | grep -qx 'uncovered=0' && echo 1 || echo 0)"
+check "reading wrote no note"                             "$( [ -z "$(git notes --ref=adr list 2>/dev/null)" ] && echo 1 || echo 0)"
+before=$(lists)
+msg=$(bash "$AL" backfill 2>&1 >/dev/null); bash "$AL" backlinks write >/dev/null 2>&1
+check "backfill restores the 3 links as notes"            "$( inq "$msg" '3 link(s) restored' && [ "$(git notes --ref=adr list | wc -l | tr -d ' ')" = 2 ] && echo 1 || echo 0)"
+check "the lists in the records are unchanged"            "$( [ "$before" = "$(lists)" ] && echo 1 || echo 0)"
+check "the tree is clean after the refresh"               "$( [ -z "$(git status --porcelain)" ] && echo 1 || echo 0)"
+msg=$(bash "$AL" backfill 2>&1 >/dev/null)
+check "a second backfill restores nothing"                "$( inq "$msg" '0 link(s) restored' && echo 1 || echo 0)"
+
+say "a new link in a clone keeps the links that the lists hold"
+clone "$T/clone2"
+bash "$AL" link "$CA" 2 >/dev/null 2>&1
+k=$(bash "$AL" query "$CA" 2>/dev/null)
+check "the commit has its old record and the new one"     "$( inq "$k" 'ADR-0001' && inq "$k" 'ADR-0002' && echo 1 || echo 0)"
+q=$(bash "$AL" query 1 2>/dev/null)
+check "the other commit of record 1 is still there"       "$( inq "$q" "$CB" && echo 1 || echo 0)"
+
+say "a note here wins over an older list"
+clone "$T/clone3"
+bash "$AL" backfill >/dev/null 2>&1
+git notes --ref=adr add -f -m "ADR: 0002" "$CA" >/dev/null 2>&1   # moved by hand; record 1's list still names it
+bash "$AL" backfill >/dev/null 2>&1
+k=$(bash "$AL" query "$CA" 2>/dev/null)
+check "the moved commit keeps its new record only"        "$( inq "$k" 'ADR-0002' && ! inq "$k" 'ADR-0001' && echo 1 || echo 0)"
+bash "$AL" backlinks write >/dev/null 2>&1
+check "the next write takes it off record 1's list"       "$( ! grep -q "$CA" docs/adr/0001-first.md && grep -q "$CA" docs/adr/0002-second.md && echo 1 || echo 0)"
+git notes --ref=adr remove "$CB" >/dev/null 2>&1; bash "$AL" backlinks write >/dev/null 2>&1
+check "a note that was only removed comes back"           "$( grep -q "$CB" docs/adr/0001-first.md && inq "$(git notes --ref=adr show "$CB" 2>/dev/null)" '0002' && echo 1 || echo 0)"
+# to remove a link for good: the note and the line in the list
+for r in docs/adr/0001-first.md docs/adr/0002-second.md; do grep -v -- "$CB" "$r" > "$r.tmp" && mv "$r.tmp" "$r"; done
+git notes --ref=adr remove "$CB" >/dev/null 2>&1
+bash "$AL" backfill >/dev/null 2>&1; bash "$AL" backlinks write >/dev/null 2>&1
+check "without its note and its lines the link stays gone" "$( ! cat docs/adr/000[12]-*.md | grep -q -- "$CB" && ! git notes --ref=adr show "$CB" >/dev/null 2>&1 && echo 1 || echo 0)"
+
+say "a shallow clone lacks the old commits: their lines stay in the lists"
+cd "$T/origin" || exit 1
+echo d > d.py; CD=$(cn 50 "feat: later work")
+bash "$AL" link "$CD" 1 >/dev/null 2>&1; bash "$AL" backlinks write >/dev/null 2>&1; ca 40 "docs(adr): refresh the link index" >/dev/null
+check "the origin lists all three commits of record 1"    "$( [ "$(grep -c '^- `' docs/adr/0001-first.md)" = 3 ] && echo 1 || echo 0)"
+git clone -q --depth 3 "file://$T/origin" "$T/shallow" 2>/dev/null; cd "$T/shallow" || exit 1
+git config user.email t@test.invalid; git config user.name t
+check "the clone has the new commit and lacks the old ones" "$( git cat-file -e "$CD^{commit}" 2>/dev/null && ! git cat-file -e "$CA^{commit}" 2>/dev/null && echo 1 || echo 0)"
+before=$(lists)
+bash "$AL" backfill >/dev/null 2>&1; bash "$AL" backlinks write >/dev/null 2>&1
+check "the lists are unchanged"                           "$( [ "$before" = "$(lists)" ] && echo 1 || echo 0)"
+q=$(bash "$AL" query 1 2>/dev/null)
+check "the record names the commit that the clone has"    "$( inq "$q" "$CD" && echo 1 || echo 0)"
+echo e > e.py; CE=$(cn 30 "feat: work in the clone"); bash "$AL" link "$CE" 1 >/dev/null 2>&1; bash "$AL" backlinks write >/dev/null 2>&1
+check "a new link here is added and the old lines stay"   "$( [ "$(grep -c '^- `' docs/adr/0001-first.md)" = 4 ] && grep -q -- "$CA" docs/adr/0001-first.md && grep -q -- "$CB" docs/adr/0001-first.md && grep -q -- "$CE" docs/adr/0001-first.md && echo 1 || echo 0)"
 
 if [ "$FAILS" -eq 0 ]; then say "ALL PASS"; exit 0; else say "FAILED: $FAILS case(s)"; exit 1; fi

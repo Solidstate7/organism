@@ -20,6 +20,10 @@
 #                      idempotent <!-- adr-links --> block into each ADR file.
 #   query <N|hash>     print the link both directions for an ADR number or a commit.
 #
+# Where the links are kept: in a git note on each commit, and in the list that
+# `backlinks write` puts into each record. The notes are local. The lists are committed,
+# so a clone reads the links from them (see _missing_links).
+#
 # OPT-IN, per repo:
 #   # forward enforcement (a 1-line shim; never auto-installed):
 #   printf '#!/bin/sh\nexec organism adr-link commit-msg "$1"\n' \
@@ -33,6 +37,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 NOTES_REF=adr
+RESTORED=0; _RESTORE_DONE=""   # set by _restore_links
 err() { printf 'adr-link: %s\n' "$*" >&2; }
 
 repo_root() { git rev-parse --show-toplevel 2>/dev/null; }
@@ -140,6 +145,63 @@ _mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || true; }
 # Epoch seconds $1 as a local "YYYY-MM-DD HH:MM" (BSD date, else GNU date).
 _when() { date -r "$1" '+%Y-%m-%d %H:%M' 2>/dev/null || date -d "@$1" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "@$1"; }
 
+# ---- links kept in the records (the committed copy) --------------------------
+# Git doesn't push notes, so a clone has none. `backlinks write` puts the same links
+# into each record as a list, and the records are committed. A commit that has no note
+# takes its links from those lists. A commit that has a note keeps it as it is, so a
+# link that was changed here is never undone by an older list.
+# To remove a link, remove the note and delete the commit's line from the list in the
+# record. A note that was only removed comes back from that list.
+#
+# _missing_links prints "H<TAB>NNNN" for each link that only a list holds. It writes
+# nothing and always returns 0.
+_missing_links() {
+  local d; d=$(adr_dir)
+  [ -n "$d" ] && [ -d "$d" ] || return 0
+  local cand
+  cand=$( { git notes --ref="$NOTES_REF" list 2>/dev/null | awk '{print "N\t" $2}' || true
+            awk '
+              BEGIN { bt = sprintf("%c", 96) }
+              FNR == 1 { inb = 0; n = FILENAME; sub(/.*\//, "", n); n = substr(n, 1, 4) }
+              /<!-- adr-links:start/ { inb = 1; next }
+              /<!-- adr-links:end/   { inb = 0; next }
+              inb && n != "0000" && $1 == "-" && substr($2, 1, 1) == bt && substr($2, length($2), 1) == bt {
+                h = substr($2, 2, length($2) - 2)
+                if (h ~ /^[0-9a-f]+$/ && length(h) >= 7 && length(h) <= 40) print "L\t" h "\t" n
+              }' "$d"/[0-9][0-9][0-9][0-9]-*.md 2>/dev/null || true; } \
+          | awk -F'\t' '
+              $1 == "N" { for (l = 7; l <= 40; l++) noted[substr($2, 1, l)] = 1; next }
+              !($2 in noted) { print $2 "\t" $3 }' | sort -u ) || true
+  [ -n "$cand" ] || return 0
+  # One git process says which of these hashes is a commit in this clone. It answers one
+  # line per hash, in the same order. A link is printed only when the full hash in the
+  # answer starts with the hash from the list.
+  paste <(printf '%s\n' "$cand") \
+        <(printf '%s\n' "$cand" | awk -F'\t' '{print $1 "^{commit}"}' | git cat-file --batch-check 2>/dev/null || true) \
+    | awk -F'\t' '{ k = split($3, a, " "); if (k >= 2 && a[2] == "commit" && substr(a[1], 1, length($1)) == $1) print a[1] "\t" $2 }' || true
+  return 0
+}
+
+# Write the links that only a list holds into notes, once per run. The commands that
+# change links call it first, so a new link is added to the old ones and never replaces
+# them. RESTORED counts the links written.
+_restore_links() {
+  [ -z "$_RESTORE_DONE" ] || return 0
+  _RESTORE_DONE=1
+  local miss; miss=$(_missing_links | sort -u) || true
+  [ -n "$miss" ] || return 0
+  local H n cur="" note="" k=0
+  while IFS=$'\t' read -r H n; do
+    if [ "$H" != "$cur" ]; then
+      if [ -n "$cur" ] && git notes --ref="$NOTES_REF" add -m "${note%$'\n'}" "$cur" >/dev/null 2>&1; then RESTORED=$((RESTORED+k)); fi
+      cur=$H; note=""; k=0
+    fi
+    note="${note}ADR: ${n}"$'\n'; k=$((k+1))
+  done <<< "$miss"
+  if [ -n "$cur" ] && git notes --ref="$NOTES_REF" add -m "${note%$'\n'}" "$cur" >/dev/null 2>&1; then RESTORED=$((RESTORED+k)); fi
+  return 0
+}
+
 # ---- subcommand: commit-msg (forward link enforcement) ----------------------
 cmd_commit_msg() {
   local msgfile="${1:?commit-msg: message file required}"
@@ -184,6 +246,7 @@ cmd_commit_msg() {
 cmd_backfill() {
   local root; root=$(repo_root) || { err "not in a git repo"; exit 1; }
   cd "$root"
+  _restore_links
   local added=0 skipped=0 touched=0
   local H nums n n4 have note
   while IFS= read -r H; do
@@ -209,6 +272,8 @@ cmd_backfill() {
   # commit predates it and can't name it, so the loop above can't find these; but
   # the ADR's provenance line cites the hash, and that line is committed (durable).
   # Reading it back makes retro links REPRODUCIBLE from the ADR, not just the notes.
+  # The generated list is left out here: _restore_links has read it already, and only
+  # for commits with no note.
   local d f n4 h relinked=0
   d=$(adr_dir)
   for f in "$d"/[0-9][0-9][0-9][0-9]-*.md; do
@@ -216,11 +281,12 @@ cmd_backfill() {
     while IFS= read -r h; do
       git rev-parse -q --verify "${h}^{commit}" >/dev/null 2>&1 || continue   # only real commits
       ( cmd_link "$h" "$((10#$n4))" ) >/dev/null 2>&1 && relinked=$((relinked+1)) || true
-    done < <(grep -iE 'implement|provenance' "$f" 2>/dev/null | grep -oiE '[0-9a-f]{7,40}' | sort -u)
+    done < <(sed '/<!-- adr-links:start/,/<!-- adr-links:end/d' "$f" 2>/dev/null \
+               | grep -iE 'implement|provenance' | grep -oiE '[0-9a-f]{7,40}' | sort -u)
   done
 
-  err "backfill: $added commit(s) linked from messages, $skipped already noted, $relinked retro link(s) from ADR provenance bodies."
-  err "undo:    git update-ref -d refs/notes/$NOTES_REF"
+  err "backfill: $added commit(s) linked from messages, $skipped already noted, $relinked retro link(s) from ADR provenance bodies, $RESTORED link(s) restored from the lists in the records."
+  err "undo:    git update-ref -d refs/notes/$NOTES_REF (the next run restores the links that a list in a record holds)"
 }
 
 # Collect "H<TAB>NNNN" pairs from BOTH notes and ADR: trailers, across history.
@@ -238,16 +304,40 @@ _pairs() {
         printf '%s' "$tv" | extract_vals | sort -un \
           | while IFS= read -r n; do printf '%s\t%04d\n' "$H" "$n"; done
       done
+  # from the lists in the records, for a commit that has no note here (a fresh clone)
+  _missing_links
+}
+
+# The lines of one record's list whose commit is not in this clone, as "I<TAB>line"
+# (under "Implemented by") or "R<TAB>line" (under "Recorded by"). A shallow clone lacks
+# the old commits, and a squash merge leaves the commits of the branch behind. This
+# clone can't check such a line, so `backlinks write` keeps it as it is.
+_unknown_lines() {
+  local f="$1" sec h line
+  while IFS=$'\t' read -r sec h line; do
+    git rev-parse -q --verify "${h}^{commit}" >/dev/null 2>&1 || printf '%s\t%s\n' "$sec" "$line"
+  done < <(awk '
+    BEGIN { bt = sprintf("%c", 96) }
+    /<!-- adr-links:start/ { inb = 1; sec = "I"; next }
+    /<!-- adr-links:end/   { inb = 0; next }
+    inb && /^## Recorded by/ { sec = "R"; next }
+    inb && /^## /            { sec = "I"; next }
+    inb && $1 == "-" && substr($2, 1, 1) == bt && substr($2, length($2), 1) == bt {
+      h = substr($2, 2, length($2) - 2)
+      if (h ~ /^[0-9a-f]+$/ && length(h) >= 7 && length(h) <= 40) print sec "\t" h "\t" $0
+    }' "$f" 2>/dev/null || true)
+  return 0
 }
 
 # ---- subcommand: backlinks (reverse index ADR -> commits) -------------------
 cmd_backlinks() {
   local write="${1:-}"; local root; root=$(repo_root) || { err "not in a git repo"; exit 1; }
   cd "$root"; local d; d=$(adr_dir)
+  if [ "$write" = write ]; then _restore_links; fi
   local pairs; pairs=$(_pairs | sort -u)
   [ -z "$pairs" ] && { err "no links yet: run 'backfill' first (or add ADR: trailers)."; exit 0; }
 
-  local f n4 block H subj short impl rec listed
+  local f n4 block H subj short impl rec listed unk ks kl
   for f in "$d"/[0-9][0-9][0-9][0-9]-*.md; do
     [ -e "$f" ] || continue
     n4=$(basename "$f" | grep -oE '^[0-9]{4}'); [ "$n4" = 0000 ] && continue
@@ -259,6 +349,16 @@ cmd_backlinks() {
       if [ "$(_kind_for "$H" "$n4")" = records ]; then rec="${rec}- \`$short\` ${subj}"$'\n'
       else impl="${impl}- \`$short\` ${subj}"$'\n'; fi
     done <<< "$listed"
+    # A line of the old list whose commit is not in this clone stays in the list. The
+    # lines are sorted by hash, which is the order that the full list had.
+    unk=$(_unknown_lines "$f")
+    if [ -n "$unk" ]; then
+      while IFS=$'\t' read -r ks kl; do
+        if [ "$ks" = R ]; then rec="${rec}${kl}"$'\n'; else impl="${impl}${kl}"$'\n'; fi
+      done <<< "$unk"
+      [ -z "$impl" ] || impl=$(printf '%s' "$impl" | LC_ALL=C sort -u)$'\n'
+      [ -z "$rec" ]  || rec=$(printf '%s' "$rec" | LC_ALL=C sort -u)$'\n'
+    fi
     # Implemented-by is the cross-validation set; an empty one is surfaced, not hidden.
     block="## Implemented by"$'\n'
     if [ -n "$impl" ]; then block="${block}${impl}"
@@ -301,8 +401,10 @@ cmd_query() {
     done
   else
     printf 'commit %s -> ADRs:\n' "$arg"
+    local full; full=$(git rev-parse -q --verify "${arg}^{commit}" 2>/dev/null || true)
     { git notes --ref="$NOTES_REF" show "$arg" 2>/dev/null || true
-      git show -s --format='%(trailers:key=ADR,valueonly)' "$arg" 2>/dev/null || true; } \
+      git show -s --format='%(trailers:key=ADR,valueonly)' "$arg" 2>/dev/null || true
+      if [ -n "$full" ]; then _missing_links | awk -F'\t' -v h="$full" '$1==h{print $2}'; fi; } \
       | extract_vals | sort -un | while IFS= read -r n; do printf '  ADR-%04d  %s\n' "$n" "$(adr_file_for "$n" || echo '(no file)')"; done
   fi
 }
@@ -316,6 +418,7 @@ cmd_link() {
   local commit="${1:?link: <commit> required}"; shift
   [ "$#" -ge 1 ] || { err "link: at least one ADR number required"; exit 2; }
   local root; root=$(repo_root) || { err "link: not a git repo"; exit 1; }; cd "$root"
+  _restore_links
   local H; H=$(git rev-parse -q --verify "${commit}^{commit}" 2>/dev/null) \
     || { err "link: unknown commit '$commit'"; exit 1; }
   local have new n all note
@@ -371,6 +474,7 @@ cmd_link_session() {
     [ "$#" -ge 1 ] || { err "link-session: ADR number(s) required"; exit 2; }
   fi
   local root; root=$(repo_root) || { err "link-session: not a git repo"; exit 1; }; cd "$root"
+  if [ "$list" = 0 ]; then _restore_links; fi
   local d adrrel prev range H ct linked=0 skipped=0 older=0
   d=$(adr_dir); adrrel=${d#"$root"/}
   # check every number up front: a flag after the numbers would otherwise be read as
@@ -501,6 +605,7 @@ cmd_state() {
     total=$((total+1))
     git notes --ref="$NOTES_REF" show "$H" >/dev/null 2>&1 && continue
     [ -n "$(git show -s --format='%(trailers:key=ADR,valueonly)' "$H" 2>/dev/null)" ] && continue
+    case $'\n'"$pairs" in *$'\n'"$H"$'\t'*) continue ;; esac   # linked by a list in a record
     unlinked=$((unlinked+1))
   done < <(git rev-list --no-merges HEAD 2>/dev/null)
   covered=0
