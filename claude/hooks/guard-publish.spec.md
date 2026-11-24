@@ -167,6 +167,7 @@ A `PreToolUse` hook with matcher `Bash` never observes MCP tool calls (`mcp__cla
 
 - `WebFetch` and `WebSearch` are always scanned: a URL or a search query goes to a third party, so a term in it is exposure. For `WebFetch` the URL is read as written and with its `%`-encoded runs decoded, and its `prompt` is left out (it stays with Claude, the site never sees it). For `WebSearch` the whole `tool_input` is read (the query, the domain lists). They need a `PreToolUse` matcher `WebFetch|WebSearch` wired to this hook.
 - If the tool **name** matches `deploy|publish|push|release|gist|upload|create|update|post|send|comment|issue|message|commit|merge|share` (case-insensitive, covers `mcp__<server>__deploy_*`, `create_pull_request`, `post_message` style), the JSON-serialized `tool_input` is scanned for active terms; a hit hard-blocks (exit 2), otherwise silent allow. Read-shaped names that happen to match (e.g. `get_deployment`) cost only a scan, they block only on a term hit, and a term in an outbound MCP query is itself exposure.
+- A tool is scanned the same way when its name has the word `reply` or `forward` in it, as Gmail's two tools do. Both send a mail.
 - Any other tool name passes silently.
 
 Plainly: **an MCP publish-capable tool with no wired matcher is not covered at all.** Disable publish-capable MCP tools in unattended contexts, or wire matchers for them.

@@ -4,6 +4,12 @@ All notable changes to Organism are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- The publish guard now also checks mail replies and forwards sent through a connector.
+
 ## [0.5.0] - 2026-11-20
 
 ### Added

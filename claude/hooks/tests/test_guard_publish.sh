@@ -311,6 +311,11 @@ assert_rc "publish-class MCP tool name, term in tool_input"  2 "$(runjson '{"too
 assert_rc "publish-class MCP tool name, clean input → allow" 0 "$(runjson '{"tool_name":"mcp__x__deploy_thing","tool_input":{"note":"fine"}}')"
 assert_rc "connector write (create_or_update_file), term → block"   2 "$(runjson '{"tool_name":"mcp__github__create_or_update_file","tool_input":{"content":"AcmeCorp notes"}}')"
 assert_rc "connector message (post_message), term → block"         2 "$(runjson '{"tool_name":"mcp__slack__post_message","tool_input":{"text":"AcmeCorp ships"}}')"
+assert_rc "mail reply, term in the body → block"                   2 "$(runjson '{"tool_name":"mcp__claude_ai_Gmail__reply","tool_input":{"body":"AcmeCorp notes"}}')"
+assert_rc "mail forward, term in the body → block"                 2 "$(runjson '{"tool_name":"mcp__claude_ai_Gmail__forward","tool_input":{"body":"see AcmeCorp"}}')"
+assert_rc "reply_to_thread, term → block"                          2 "$(runjson '{"tool_name":"mcp__x__reply_to_thread","tool_input":{"text":"AcmeCorp"}}')"
+assert_rc "mail reply, clean body → allow"                         0 "$(runjson '{"tool_name":"mcp__claude_ai_Gmail__reply","tool_input":{"body":"thanks"}}')"
+assert_rc "reply inside a longer word of a read → allow"           0 "$(runjson '{"tool_name":"mcp__x__get_replying","tool_input":{"q":"AcmeCorp"}}')"
 assert_rc "connector read (get_file_contents), term → allow"       0 "$(runjson '{"tool_name":"mcp__github__get_file_contents","tool_input":{"path":"AcmeCorp.md"}}')"
 assert_rc "non-publish tool name → allow (even with a term)" 0 "$(runjson '{"tool_name":"Read","tool_input":{"file_path":"AcmeCorp.txt"}}')"
 

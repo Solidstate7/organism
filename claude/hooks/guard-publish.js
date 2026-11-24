@@ -1057,16 +1057,20 @@ function incompleteBlock(what, detail) {
 let data = {};
 let cmd = '';
 
+// A reply or a forward sends a mail too. This pattern is separate from the list in toolCall,
+// because a test keeps that list equal to its copy in obsidian-mirror.py.
+const REPLY_TOOL_RE = /(?:^|_)(?:reply|forward)(?:_|$)/i;
+
 // Non-Bash surfaces. A PreToolUse(Bash) matcher never sees MCP or web tools;
 // settings.json wires this same hook onto more matchers. WebFetch and WebSearch hand a
 // URL or a query to a third party, so they are always scanned (WebFetch's `prompt` is
 // left out: it stays with Claude, the URL goes to the site). Any other tool is scanned
 // when its NAME is publish-class (deploy/publish/push/release/gist/upload, which covers
-// mcp__<server>__deploy_* style); the rest pass silently.
+// mcp__<server>__deploy_* style) or is a reply or a forward; the rest pass silently.
 function toolCall(terms) {
   const name = String(data.tool_name || '');
   const web = name === 'WebFetch' || name === 'WebSearch';
-  if (!web && !/deploy|publish|push|release|gist|upload|create|update|post|send|comment|issue|message|commit|merge|share/i.test(name)) return;
+  if (!web && !/deploy|publish|push|release|gist|upload|create|update|post|send|comment|issue|message|commit|merge|share/i.test(name) && !REPLY_TOOL_RE.test(name)) return;
   let input = data.tool_input || {};
   const hay = [];
   if (name === 'WebFetch' && typeof input === 'object') {
