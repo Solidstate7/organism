@@ -345,6 +345,9 @@ cmd_backlinks() {
     [ -z "$listed" ] && continue
     impl=""; rec=""
     while IFS= read -r H; do
+      # A note can stay after its commit is gone: git prunes the commits of a branch
+      # that was squashed and leaves their notes. The line of such a commit is kept below.
+      git cat-file -e "${H}^{commit}" 2>/dev/null || continue
       subj=$(git log -1 --format='%s' "$H" | cut -c1-90); short=$(git rev-parse --short "$H")
       if [ "$(_kind_for "$H" "$n4")" = records ]; then rec="${rec}- \`$short\` ${subj}"$'\n'
       else impl="${impl}- \`$short\` ${subj}"$'\n'; fi
@@ -395,6 +398,9 @@ cmd_query() {
     local n n4 kind; n=$(printf '%s' "$arg" | sed 's/^[Aa][Dd][Rr][-_ ]*//; s/^0*//'); n4=$(printf '%04d' "$n")
     printf 'ADR-%s -> commits%s:\n' "$n4" "$( [ "$impl_only" = 1 ] && echo ' (implements only)')"
     _pairs | awk -F'\t' -v n="$n4" '$2==n{print $1}' | sort -u | while IFS= read -r H; do
+      if ! git cat-file -e "${H}^{commit}" 2>/dev/null; then   # a note whose commit git has pruned
+        printf '  %s  %-10s %s\n' "$(printf '%s' "$H" | cut -c1-7)" "?" "(this commit is not in the repository any more)"; continue
+      fi
       kind=$(_kind_for "$H" "$n4")
       [ "$impl_only" = 1 ] && [ "$kind" = records ] && continue
       printf '  %s  %-10s %s\n' "$(git rev-parse --short "$H")" "$kind" "$(git log -1 --format='%s' "$H" | cut -c1-76)"

@@ -15,6 +15,9 @@ All notable changes to Organism are listed here. The format follows
   lists when a commit has no note, and a harvest writes them back as notes. A line of
   such a list also stays when the clone doesn't have its commit, as in a shallow clone
   or after a squash merge.
+- `organism adr-link backlinks write` no longer stops with "bad object" when git has
+  pruned a commit that has a note. Git does that some time after a squash merge. The
+  line of that commit stays in the record's list.
 
 ## [0.5.0] - 2026-11-20
 

@@ -13,6 +13,7 @@
 # `backlinks write` put into the records. A command that only reads uses the lists as
 # they are, and a command that writes first restores them as notes. A note that exists
 # is never replaced. A line whose commit is not in the clone stays in the list.
+# A note whose commit git has pruned doesn't stop `backlinks write`.
 # Self-contained under mktemp; never touches a real repo.
 # Run:  bash claude/hooks/tests/test_adr_link.sh
 set -u
@@ -304,5 +305,23 @@ q=$(bash "$AL" query 1 2>/dev/null)
 check "the record names the commit that the clone has"    "$( inq "$q" "$CD" && echo 1 || echo 0)"
 echo e > e.py; CE=$(cn 30 "feat: work in the clone"); bash "$AL" link "$CE" 1 >/dev/null 2>&1; bash "$AL" backlinks write >/dev/null 2>&1
 check "a new link here is added and the old lines stay"   "$( [ "$(grep -c '^- `' docs/adr/0001-first.md)" = 4 ] && grep -q -- "$CA" docs/adr/0001-first.md && grep -q -- "$CB" docs/adr/0001-first.md && grep -q -- "$CE" docs/adr/0001-first.md && echo 1 || echo 0)"
+
+say "a commit that was squashed away and pruned: its note stays, and so does its line"
+fresh "$T/squash"
+mkdir -p docs/adr; printf '# 0001. First\n' > docs/adr/0001-first.md; ca 900 "docs(adr): record the first" >/dev/null
+echo a > a.py; SK=$(cn 800 "feat: kept on the main branch")
+MAINB=$(git symbolic-ref --short HEAD); git checkout -q -b feature
+echo b > b.py; SB=$(cn 700 "feat: on a branch that is squashed")
+bash "$AL" link "$SK" 1 >/dev/null 2>&1; bash "$AL" link "$SB" 1 >/dev/null 2>&1
+bash "$AL" backlinks write >/dev/null 2>&1; ca 600 "docs(adr): refresh the link index" >/dev/null
+git checkout -q "$MAINB"; git merge -q --squash feature >/dev/null 2>&1; ca 500 "feat: the branch as one commit" >/dev/null
+git branch -q -D feature; git reflog expire --expire=now --all; git gc -q --prune=now 2>/dev/null
+check "git has pruned the commit and kept its note"       "$( ! git cat-file -e "$SB^{commit}" 2>/dev/null && git notes --ref=adr list 2>/dev/null | grep -q "$SB" && echo 1 || echo 0)"
+before=$(cat docs/adr/0001-first.md)
+bash "$AL" backlinks write >/dev/null 2>&1; rc=$?
+check "backlinks write still runs"                        "$( [ "$rc" = 0 ] && echo 1 || echo 0)"
+check "the list still names both commits"                 "$( [ "$before" = "$(cat docs/adr/0001-first.md)" ] && grep -q -- "$SB" docs/adr/0001-first.md && echo 1 || echo 0)"
+q=$(bash "$AL" query 1 2>/dev/null); rc=$?
+check "query runs and names both"                         "$( [ "$rc" = 0 ] && inq "$q" "$SK" && inq "$q" "$SB" && echo 1 || echo 0)"
 
 if [ "$FAILS" -eq 0 ]; then say "ALL PASS"; exit 0; else say "FAILED: $FAILS case(s)"; exit 1; fi
